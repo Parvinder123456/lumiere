@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import './App.css';
-import Auth from './Auth'; // Import the new Login Component
-import { auth } from './firebase'; // Ensure firebase.js is set up
+import Auth from './Auth'; 
+import { auth } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 function App() {
@@ -9,13 +9,14 @@ function App() {
   const API_BASE_URL = 'https://lumiere-func-linux.azurewebsites.net/api';
   
   // --- AUTH & USER STATE ---
-  const [user, setUser] = useState(null); // Firebase User Object
+  const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   // --- NAVIGATION STATE ---
   const [activeTab, setActiveTab] = useState('create');
   const [activeCategory, setActiveCategory] = useState('rings');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // <--- NEW STATE FOR MOBILE MENU
 
   // --- DATA STATE ---
   const [collectionsData, setCollectionsData] = useState([]);
@@ -70,7 +71,6 @@ function App() {
     { value: 'none', label: 'No Gemstone', emoji: '✨', color: '#eee' }
   ];
 
-  // UPDATED: Added colors for buttons instead of dropdown
   const finishOptions = [
     { value: 'polished', label: 'High Polish', color: '#e2e8f0' },
     { value: 'matte', label: 'Matte/Brushed', color: '#94a3b8' },
@@ -84,7 +84,6 @@ function App() {
       setUser(currentUser);
       setAuthLoading(false);
       if (currentUser) {
-        // Fetch gallery only if logged in
         fetchGallery(currentUser.uid);
       }
     });
@@ -92,8 +91,6 @@ function App() {
   }, []);
 
   // --- 2. API CALLS ---
-  
-  // Fetch Gallery
   const fetchGallery = async (uid) => {
     try {
       const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
@@ -106,10 +103,10 @@ function App() {
     }
   };
 
-  // Fetch Collections
   const loadCollection = async (category) => {
     setActiveCategory(category);
     setActiveTab('collections');
+    setMobileMenuOpen(false); // Close menu on mobile
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/collections?category=${category}`);
@@ -126,25 +123,20 @@ function App() {
     }
   };
 
-  // Delete Template
   const handleDeleteTemplate = async (e, id) => {
     e.stopPropagation();
     if(!confirm("Delete this template?")) return;
-
-    // Optimistic UI update
     const originalData = [...collectionsData];
     setCollectionsData(prev => prev.filter(item => item.id !== id));
-
     try {
       const res = await fetch(`${API_BASE_URL}/collections?id=${id}&category=${activeCategory}`, { method: 'DELETE' });
       if (!res.ok) throw new Error("Delete failed");
     } catch (err) {
       alert("Error deleting: " + err.message);
-      setCollectionsData(originalData); // Revert
+      setCollectionsData(originalData);
     }
   };
 
-  // Upload Template
   const handleUploadTemplate = async () => {
     if (!newTemplateFile || !newTemplateName) return alert("Select file and name!");
     setStatusMessage("Uploading...");
@@ -162,7 +154,6 @@ function App() {
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error("Upload failed");
-      
       await loadCollection(activeCategory);
       setShowUploadModal(false);
       setNewTemplateFile(null);
@@ -175,7 +166,6 @@ function App() {
     }
   };
 
-  // Use Template Logic
   const handleUseTemplate = async (templateUrl, templateName) => {
     setLoading(true);
     setStatusMessage("Loading template...");
@@ -222,7 +212,6 @@ function App() {
           });
           if (!response.ok) throw new Error("Generation failed");
           const jsonData = await response.json();
-          
           const newItem = { 
             imageUrl: jsonData.images[0], 
             name: `Design for ${sketchFiles[i].name}`,
@@ -230,8 +219,6 @@ function App() {
             createdAt: new Date().toISOString()
           };
           newItems.push(newItem);
-
-          // Save to DB
           await fetch(`${API_BASE_URL}/gallery?userId=${user.uid}`, {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
@@ -295,14 +282,12 @@ function App() {
   const handleLogoUpload = (e) => setLogoFile(e.target.files[0]);
   const handleLogout = () => signOut(auth);
 
-  // --- VIDEO LOGIC (Same as before) ---
   const handleGenerateVideo = async (imageResult) => {
     setVideoModalOpen(true); setVideoStatus('queued'); setVideoLogs([]);
     try {
       let imageB64 = imageResult.imageUrl || imageResult.url;
       setVideoLogs(p => [{time: new Date().toLocaleTimeString(), message: 'Optimizing...', type:'info'}, ...p]);
       imageB64 = await compressImageForVideo(imageB64);
-      
       const submitRes = await fetch(`${API_BASE_URL}/submit_video`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -311,7 +296,6 @@ function App() {
       if(!submitRes.ok) throw new Error("Submit failed");
       const { job_id } = await submitRes.json();
       setVideoJobId(job_id);
-      
       pollIntervalRef.current = setInterval(async () => {
         try {
           const res = await fetch(`${API_BASE_URL}/status/${job_id}`);
@@ -332,29 +316,28 @@ function App() {
   };
   const closeVideoModal = () => { clearInterval(pollIntervalRef.current); setVideoModalOpen(false); };
 
-  // --- RENDER ---
   if (authLoading) return <div className="dashboard-layout" style={{justifyContent:'center', alignItems:'center'}}>Loading...</div>;
+  if (!user) return <Auth />;
 
-  // 🔒 IF NOT LOGGED IN, SHOW AUTH
-  if (!user) {
-    return <Auth />;
-  }
-
-  // 🔓 DASHBOARD
   return (
     <div className="dashboard-layout">
-      {/* 1. SIDEBAR */}
-      <aside className="sidebar">
+      {/* MOBILE OVERLAY (To Close Menu) */}
+      {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
+
+      {/* 1. SIDEBAR (Hidden on mobile unless toggled) */}
+      <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="logo-icon">💎</div>
           <div className="logo-text">Lumière <span className="gold-text">Atelier</span></div>
+          {/* Close button for Mobile */}
+          <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)}>✕</button>
         </div>
 
         <nav className="sidebar-nav">
-          <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => setActiveTab('create')}>
+          <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
             <span className="icon">✨</span> Create Design
           </button>
-          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => setActiveTab('gallery')}>
+          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => {setActiveTab('gallery'); setMobileMenuOpen(false);}}>
             <span className="icon">🖼️</span> My Gallery
           </button>
           
@@ -366,7 +349,6 @@ function App() {
                   onClick={() => loadCollection('necklaces')}>Necklaces</button>
         </nav>
 
-        {/* PROFILE MENU */}
         <div className="user-profile" onClick={() => setShowProfileMenu(!showProfileMenu)}>
           {showProfileMenu && (
             <div className="profile-menu">
@@ -385,6 +367,9 @@ function App() {
       {/* 2. MAIN CONTENT */}
       <main className="main-content">
         <header className="top-header">
+          {/* HAMBURGER BUTTON (Mobile Only) */}
+          <button className="hamburger-btn" onClick={() => setMobileMenuOpen(true)}>☰</button>
+
           <h2 className="page-title">
              {activeTab === 'create' && 'Design Studio'}
              {activeTab === 'gallery' && 'Your Gallery'}
@@ -392,11 +377,11 @@ function App() {
           </h2>
           {activeTab === 'create' && (
              <button className="btn-primary" onClick={handleGenerateAll} disabled={loading || sketchFiles.length === 0}>
-               {loading ? `Working...` : '🚀 Generate Renders'}
+               {loading ? `Working...` : '🚀 Generate'}
              </button>
           )}
           {activeTab === 'collections' && (
-             <button className="btn-upload-sm" onClick={() => setShowUploadModal(true)}>📤 Add Template</button>
+             <button className="btn-upload-sm" onClick={() => setShowUploadModal(true)}>📤 Add</button>
           )}
         </header>
 
@@ -424,7 +409,7 @@ function App() {
                            <div className="img-wrapper">
                               <img src={item.url} alt={item.name} />
                               <div className="overlay">
-                                 <button className="btn-primary" onClick={() => handleUseTemplate(item.url, item.name)}>✨ Use Sketch</button>
+                                 <button className="btn-primary" onClick={() => handleUseTemplate(item.url, item.name)}>✨ Use</button>
                                  <button className="delete-btn-overlay" onClick={(e) => handleDeleteTemplate(e, item.id)} title="Delete">🗑️</button>
                               </div>
                            </div>
@@ -465,24 +450,16 @@ function App() {
                   </div>
                   <div className="card"><h3>Metal</h3><div className="grid-select">{metalOptions.map(opt => (<button key={opt.value} className={`grid-btn ${metalType===opt.value?'selected':''}`} onClick={()=>setMetalType(opt.value)}><span className="dot" style={{background:opt.color}}></span><span className="btn-label">{opt.label}</span></button>))}</div></div>
                   <div className="card"><h3>Gemstone</h3><div className="grid-select">{gemOptions.map(opt => (<button key={opt.value} className={`grid-btn ${gemstone===opt.value?'selected':''}`} onClick={()=>setGemstone(opt.value)}><span className="dot" style={{background:opt.color}}></span><span className="btn-label">{opt.label}</span></button>))}</div></div>
-                  
-                  {/* UPDATED: FINISH BUTTONS (Replacing Select Dropdown) */}
                   <div className="card">
                     <h3>Finish</h3>
                     <div className="grid-select">
                       {finishOptions.map(opt => (
-                        <button 
-                          key={opt.value} 
-                          className={`grid-btn ${finish === opt.value ? 'selected' : ''}`}
-                          onClick={() => setFinish(opt.value)}
-                        >
-                          <span className="dot" style={{background: opt.color}}></span>
-                          <span className="btn-label">{opt.label}</span>
+                        <button key={opt.value} className={`grid-btn ${finish === opt.value ? 'selected' : ''}`} onClick={() => setFinish(opt.value)}>
+                          <span className="dot" style={{background: opt.color}}></span><span className="btn-label">{opt.label}</span>
                         </button>
                       ))}
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
