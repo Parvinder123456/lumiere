@@ -6,7 +6,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 function App() {
   // --- CONFIGURATION ---
-  const API_BASE_URL = 'http://localhost:7071/api'; // Or your localhost if testing
+  const API_BASE_URL = 'https://lumiere-func-linux.azurewebsites.net/api'; // Or your localhost if testing
   
   // --- AUTH & USER STATE ---
   const [user, setUser] = useState(null); 
