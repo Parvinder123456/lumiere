@@ -4,22 +4,19 @@ import Auth from './Auth';
 import { auth } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-
 function App() {
   // --- CONFIGURATION ---
-  const API_BASE_URL = 'https://lumiere-func-linux.azurewebsites.net/api';
+  const API_BASE_URL = 'http://localhost:7071/api'; // Or your localhost if testing
   
   // --- AUTH & USER STATE ---
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-
   // --- NAVIGATION STATE ---
   const [activeTab, setActiveTab] = useState('create');
   const [activeCategory, setActiveCategory] = useState('rings');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
 
   // --- DATA STATE ---
   const [collectionsData, setCollectionsData] = useState([]);
@@ -40,23 +37,24 @@ function App() {
   const [newTemplateFile, setNewTemplateFile] = useState(null);
   const [newTemplateName, setNewTemplateName] = useState("");
 
-
   // Material options
   const [metalType, setMetalType] = useState('yellow-gold');
   const [gemstone, setGemstone] = useState('diamond');
   const [finish, setFinish] = useState('polished');
   const [customPrompt, setCustomPrompt] = useState('');
 
-
-  // Video generation state
+  // --- VIDEO GENERATION STATE ---
   const [videoModalOpen, setVideoModalOpen] = useState(false);
-  const [videoStatus, setVideoStatus] = useState('idle');
+  const [videoStatus, setVideoStatus] = useState('idle'); // idle, prompt, queued, processing, completed, failed
   const [videoJobId, setVideoJobId] = useState(null);
   const [videoResult, setVideoResult] = useState(null);
   const [videoLogs, setVideoLogs] = useState([]);
   
+  // ✅ NEW STATES FOR PROMPT & SELECTION
+  const [videoPrompt, setVideoPrompt] = useState(''); 
+  const [currentVideoImage, setCurrentVideoImage] = useState(null); 
+  
   const pollIntervalRef = useRef(null);
-
 
   // --- UI OPTIONS ---
   const metalOptions = [
@@ -68,7 +66,6 @@ function App() {
     { value: 'two-tone', label: 'Two-Tone Gold', emoji: '🟡⚪', color: 'linear-gradient(45deg, #E6C200 50%, #E8E8E8 50%)' }
   ];
 
-
   const gemOptions = [
     { value: 'diamond', label: 'Diamond', emoji: '💎', color: '#b9f2ff' },
     { value: 'ruby', label: 'Ruby', emoji: '🔴', color: '#9b111e' },
@@ -78,14 +75,12 @@ function App() {
     { value: 'none', label: 'No Gemstone', emoji: '✨', color: '#eee' }
   ];
 
-
   const finishOptions = [
     { value: 'polished', label: 'High Polish', color: '#e2e8f0' },
     { value: 'matte', label: 'Matte/Brushed', color: '#94a3b8' },
     { value: 'hammered', label: 'Hammered', color: '#475569' },
     { value: 'engraved', label: 'Engraved', color: '#f59e0b' }
   ];
-
 
   // --- 1. INITIALIZATION & AUTH ---
   useEffect(() => {
@@ -99,7 +94,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-
   // --- 2. API CALLS ---
   const fetchGallery = async (uid) => {
     try {
@@ -112,7 +106,6 @@ function App() {
       console.warn("Gallery fetch failed");
     }
   };
-
 
   const loadCollection = async (category) => {
     setActiveCategory(category);
@@ -134,7 +127,6 @@ function App() {
     }
   };
 
-
   const handleDeleteTemplate = async (e, id) => {
     e.stopPropagation();
     if(!confirm("Delete this template?")) return;
@@ -148,7 +140,6 @@ function App() {
       setCollectionsData(originalData);
     }
   };
-
 
   const handleUploadTemplate = async () => {
     if (!newTemplateFile || !newTemplateName) return alert("Select file and name!");
@@ -179,7 +170,6 @@ function App() {
     }
   };
 
-
   const handleUseTemplate = async (templateUrl, templateName) => {
     setLoading(true);
     setStatusMessage("Loading template...");
@@ -199,8 +189,7 @@ function App() {
     }
   };
 
-
-  // --- 3. GENERATION LOGIC (✅ UPDATED - Single API call to backend) ---
+  // --- 3. GENERATION LOGIC ---
   const handleGenerateAll = async () => {
     if (sketchFiles.length === 0) return alert("Please upload a sketch!");
     setLoading(true); setError(""); setProgress({ current: 0, total: sketchFiles.length });
@@ -211,10 +200,9 @@ function App() {
     try {
       for (let i = 0; i < sketchFiles.length; i++) {
         try {
-          setStatusMessage(`Generating ${i+1}/${sketchFiles.length}... (30-90 seconds)`);
+          setStatusMessage(`Generating ${i+1}/${sketchFiles.length}... (30-90s)`);
           const sketchB64 = await fileToBase64(sketchFiles[i]);
           
-          // ✅ UPDATED: Pass userId, backend handles save automatically
           const response = await fetch(`${API_BASE_URL}/generate_jewelry?userId=${user.uid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -226,32 +214,26 @@ function App() {
               mode: mode
             })
           });
-          
+
           if (!response.ok) throw new Error("Generation failed");
           const jsonData = await response.json();
-          
-          // ✅ Backend saves automatically, just log success
-          if (jsonData.saved) {
-            console.log(`✅ Image ${i+1} saved to database`);
-          }
-          
+          if (jsonData.saved) console.log(`✅ Image ${i+1} saved to DB automatically.`);
+
         } catch (err) {
           console.error(err);
         }
         setProgress({ current: i + 1, total: sketchFiles.length });
       }
       
-      // ✅ Refresh gallery from database
       await fetchGallery(user.uid);
-      setActiveTab('gallery');
-      
+      if (sketchFiles.length > 0) setActiveTab('gallery');
+
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false); setStatusMessage(""); setProgress({ current: 0, total: 0 });
     }
   };
-
 
   // --- HELPERS ---
   const fileToBase64 = (file) => {
@@ -264,11 +246,11 @@ function App() {
     });
   };
 
-
   const compressImageForVideo = (base64Str) => {
     return new Promise((resolve) => {
       const img = new Image();
       img.src = base64Str;
+      img.crossOrigin = "anonymous"; 
       img.onload = () => {
         const canvas = document.createElement('canvas');
         canvas.width = img.width; canvas.height = img.height;
@@ -277,9 +259,9 @@ function App() {
         ctx.drawImage(img, 0, 0);
         resolve(canvas.toDataURL('image/jpeg', 0.85));
       };
+      img.onerror = () => resolve(base64Str); 
     });
   };
-
 
   const buildInstructions = () => {
     const metal = metalOptions.find(m => m.value === metalType)?.label || metalType;
@@ -292,7 +274,6 @@ function App() {
     return base;
   };
 
-
   // --- HANDLERS ---
   const handleSketchUpload = (e) => setSketchFiles(prev => [...prev, ...Array.from(e.target.files)]);
   const removeSketch = (idx) => setSketchFiles(prev => prev.filter((_, i) => i !== idx));
@@ -300,21 +281,77 @@ function App() {
   const handleLogoUpload = (e) => setLogoFile(e.target.files[0]);
   const handleLogout = () => signOut(auth);
 
+  // ✅ NEW: Delete from Gallery Handler
+  const handleDeleteGalleryItem = async (e, id) => {
+    e.stopPropagation(); // Stop click bubbling
+    if (!confirm("Are you sure you want to delete this design?")) return;
 
-  const handleGenerateVideo = async (imageResult) => {
-    setVideoModalOpen(true); setVideoStatus('queued'); setVideoLogs([]);
+    // Optimistic Update
+    const previousGallery = [...userGallery];
+    setUserGallery(prev => prev.filter(item => item.id !== id));
+
     try {
-      let imageB64 = imageResult.imageUrl || imageResult.url;
-      setVideoLogs(p => [{time: new Date().toLocaleTimeString(), message: 'Optimizing...', type:'info'}, ...p]);
-      imageB64 = await compressImageForVideo(imageB64);
+      const res = await fetch(`${API_BASE_URL}/gallery?id=${id}&userId=${user.uid}`, { 
+        method: 'DELETE' 
+      });
+      if (!res.ok) throw new Error("Delete failed");
+    } catch (err) {
+      alert("Could not delete item");
+      setUserGallery(previousGallery); // Revert
+    }
+  };
+
+  // ✅ STEP 1: Video Click - Show Prompt Modal
+  const handleGenerateVideo = (imageResult) => {
+    setCurrentVideoImage(imageResult);
+    setVideoModalOpen(true);
+    setVideoStatus('prompt'); // Show Input Screen first
+    setVideoLogs([]);
+
+    // Intelligent Auto-Prompt to fix "Ring vs Necklace"
+    const name = imageResult.name ? imageResult.name.toLowerCase() : "";
+    let itemType = "jewelry piece";
+    
+    if (name.includes("ring")) itemType = "diamond ring";
+    else if (name.includes("necklace")) itemType = "gold necklace";
+    else if (name.includes("earring")) itemType = "earrings";
+    else if (name.includes("pendant")) itemType = "pendant necklace";
+
+    setVideoPrompt(`Cinematic slow motion 360-degree rotation of a ${itemType}, studio lighting, 4k, white background`);
+  };
+
+  // ✅ STEP 2: Start Video Generation (Actual API Call)
+  const startVideoGeneration = async () => {
+    if (!videoPrompt.trim()) return alert("Please enter a prompt!");
+    
+    setVideoStatus('queued'); // Switch to loading screen
+
+    try {
+      const imageResult = currentVideoImage;
+      let imageSource = imageResult.imageUrl || imageResult.url;
+      let payloadImage = imageSource;
+
+      setVideoLogs(p => [{time: new Date().toLocaleTimeString(), message: 'Preparing image...', type:'info'}, ...p]);
+
+      // Only compress if local base64 (URLs are safer to pass directly)
+      if (!imageSource.startsWith('http')) {
+         payloadImage = await compressImageForVideo(imageSource);
+      }
+      
       const submitRes = await fetch(`${API_BASE_URL}/submit_video`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageB64 })
+        body: JSON.stringify({ 
+            image: payloadImage,
+            prompt: videoPrompt // Send the custom prompt
+        }) 
       });
+
       if(!submitRes.ok) throw new Error("Submit failed");
       const { job_id } = await submitRes.json();
       setVideoJobId(job_id);
+      
+      // Start Polling
       pollIntervalRef.current = setInterval(async () => {
         try {
           const res = await fetch(`${API_BASE_URL}/status/${job_id}`);
@@ -333,28 +370,28 @@ function App() {
       setVideoStatus('failed');
     }
   };
-  const closeVideoModal = () => { clearInterval(pollIntervalRef.current); setVideoModalOpen(false); };
 
+  const closeVideoModal = () => { 
+      clearInterval(pollIntervalRef.current); 
+      setVideoModalOpen(false); 
+      setCurrentVideoImage(null);
+  };
 
   if (authLoading) return <div className="dashboard-layout" style={{justifyContent:'center', alignItems:'center'}}>Loading...</div>;
   if (!user) return <Auth />;
 
-
   return (
     <div className="dashboard-layout">
-      {/* MOBILE OVERLAY (To Close Menu) */}
+      {/* MOBILE OVERLAY */}
       {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
 
-
-      {/* 1. SIDEBAR (Hidden on mobile unless toggled) */}
+      {/* 1. SIDEBAR */}
       <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="logo-icon">💎</div>
           <div className="logo-text">Lumière <span className="gold-text">Atelier</span></div>
-          {/* Close button for Mobile */}
           <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)}>✕</button>
         </div>
-
 
         <nav className="sidebar-nav">
           <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
@@ -372,7 +409,6 @@ function App() {
                   onClick={() => loadCollection('necklaces')}>Necklaces</button>
         </nav>
 
-
         <div className="user-profile" onClick={() => setShowProfileMenu(!showProfileMenu)}>
           {showProfileMenu && (
             <div className="profile-menu">
@@ -388,13 +424,10 @@ function App() {
         </div>
       </aside>
 
-
       {/* 2. MAIN CONTENT */}
       <main className="main-content">
         <header className="top-header">
-          {/* HAMBURGER BUTTON (Mobile Only) */}
           <button className="hamburger-btn" onClick={() => setMobileMenuOpen(true)}>☰</button>
-
 
           <h2 className="page-title">
              {activeTab === 'create' && 'Design Studio'}
@@ -411,11 +444,9 @@ function App() {
           )}
         </header>
 
-
         <div className="content-scroll-area">
           {error && <div className="error-banner">{error}</div>}
           {statusMessage && <div style={{textAlign:'center', marginBottom:'1rem', color:'#64748b'}}>{statusMessage}</div>}
-
 
           {/* COLLECTIONS VIEW */}
           {activeTab === 'collections' && (
@@ -448,7 +479,6 @@ function App() {
                 </div>
              </div>
           )}
-
 
           {/* CREATE VIEW */}
           {activeTab === 'create' && (
@@ -494,8 +524,7 @@ function App() {
             </div>
           )}
 
-
-          {/* GALLERY VIEW */}
+          {/* GALLERY VIEW (UPDATED) */}
           {activeTab === 'gallery' && (
             <div className="gallery-container">
                {userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
@@ -505,8 +534,14 @@ function App() {
                            <div className="img-wrapper">
                               <img src={img.imageUrl || img.url} alt={img.name} />
                               <div className="overlay">
-                                 <button className="icon-btn" onClick={() => handleGenerateVideo(img)}>🎬</button>
-                                 <a href={img.imageUrl || img.url} download className="icon-btn">⬇️</a>
+                                 {/* Video Button */}
+                                 <button className="icon-btn" onClick={() => handleGenerateVideo(img)} title="Create Video">🎬</button>
+                                 
+                                 {/* Download Button */}
+                                 <a href={img.imageUrl || img.url} download className="icon-btn" title="Download">⬇️</a>
+                                 
+                                 {/* ✅ DELETE BUTTON */}
+                                 <button className="delete-btn-gallery" onClick={(e) => handleDeleteGalleryItem(e, img.id)} title="Delete">🗑️</button>
                               </div>
                            </div>
                            <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
@@ -519,29 +554,64 @@ function App() {
         </div>
       </main>
 
-
-      {/* VIDEO MODAL */}
+      {/* VIDEO MODAL (UPDATED) */}
       {videoModalOpen && (
          <div className="modal-backdrop">
             <div className="modal-window">
                <div className="modal-header"><h3>AI Video Studio</h3><button className="close-btn" onClick={closeVideoModal}>✕</button></div>
-               <div className="video-display">
-                  {videoStatus === 'completed' && videoResult ? (
-                     <div className="video-success-container"><video src={videoResult} controls autoPlay loop className="final-video" /></div>
-                  ) : (
-                     <div className="video-loader">
-                        <div className={`spinner-ring ${videoStatus === 'failed' ? 'error' : ''}`}></div>
-                        <h4>{videoStatus === 'processing' ? 'Rendering...' : 'Waiting...'}</h4>
-                     </div>
-                  )}
-               </div>
-               <div className="terminal-logs">{videoLogs.map((log, i) => <div key={i} className={`log-line ${log.type}`}>[{log.time}] {log.message}</div>)}</div>
+               
+               {/* 1. PROMPT INPUT SCREEN */}
+               {videoStatus === 'prompt' && (
+                   <div className="video-prompt-container">
+                       <div>
+                           <h4>Describe your video</h4>
+                           <p>Adjust the prompt to help the AI understand your design.</p>
+                       </div>
+                       
+                       <textarea 
+                           className="text-input" 
+                           value={videoPrompt}
+                           onChange={(e) => setVideoPrompt(e.target.value)}
+                           style={{ minHeight: '120px' }}
+                           placeholder="E.g. 360 rotation of a gold ring..."
+                       />
+                       
+                       <div className="prompt-tips">
+                           <span className="tip-tag">💡 Mention 'Necklace' or 'Ring'</span>
+                           <span className="tip-tag">💡 Add 'Slow Motion'</span>
+                           <span className="tip-tag">💡 Add 'White Background'</span>
+                       </div>
+
+                       <button className="btn-primary" onClick={startVideoGeneration} style={{marginTop:'0.5rem'}}>
+                           ✨ Start Generation
+                       </button>
+                   </div>
+               )}
+
+               {/* 2. PROCESSING / RESULT SCREEN */}
+               {videoStatus !== 'prompt' && (
+                 <>
+                   <div className="video-display">
+                      {videoStatus === 'completed' && videoResult ? (
+                         <div className="video-success-container"><video src={videoResult} controls autoPlay loop className="final-video" /></div>
+                      ) : (
+                         <div className="video-loader">
+                            <div className={`spinner-ring ${videoStatus === 'failed' ? 'error' : ''}`}></div>
+                            <h4>{videoStatus === 'processing' ? 'Rendering...' : 'Waiting...'}</h4>
+                            <p style={{fontSize:'0.8rem', color:'#64748b', marginTop:'10px', maxWidth:'90%', marginInline:'auto'}}>
+                                "{videoPrompt.substring(0, 60)}..."
+                            </p>
+                         </div>
+                      )}
+                   </div>
+                   <div className="terminal-logs">{videoLogs.map((log, i) => <div key={i} className={`log-line ${log.type}`}>[{log.time}] {log.message}</div>)}</div>
+                 </>
+               )}
             </div>
          </div>
       )}
     </div>
   );
 }
-
 
 export default App;
