@@ -4,6 +4,7 @@ import Auth from './Auth';
 import { auth } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
+
 function App() {
   // --- CONFIGURATION ---
   const API_BASE_URL = 'https://lumiere-func-linux.azurewebsites.net/api';
@@ -13,10 +14,12 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
+
   // --- NAVIGATION STATE ---
   const [activeTab, setActiveTab] = useState('create');
   const [activeCategory, setActiveCategory] = useState('rings');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // <--- NEW STATE FOR MOBILE MENU
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
 
   // --- DATA STATE ---
   const [collectionsData, setCollectionsData] = useState([]);
@@ -37,11 +40,13 @@ function App() {
   const [newTemplateFile, setNewTemplateFile] = useState(null);
   const [newTemplateName, setNewTemplateName] = useState("");
 
+
   // Material options
   const [metalType, setMetalType] = useState('yellow-gold');
   const [gemstone, setGemstone] = useState('diamond');
   const [finish, setFinish] = useState('polished');
   const [customPrompt, setCustomPrompt] = useState('');
+
 
   // Video generation state
   const [videoModalOpen, setVideoModalOpen] = useState(false);
@@ -51,6 +56,7 @@ function App() {
   const [videoLogs, setVideoLogs] = useState([]);
   
   const pollIntervalRef = useRef(null);
+
 
   // --- UI OPTIONS ---
   const metalOptions = [
@@ -62,6 +68,7 @@ function App() {
     { value: 'two-tone', label: 'Two-Tone Gold', emoji: '🟡⚪', color: 'linear-gradient(45deg, #E6C200 50%, #E8E8E8 50%)' }
   ];
 
+
   const gemOptions = [
     { value: 'diamond', label: 'Diamond', emoji: '💎', color: '#b9f2ff' },
     { value: 'ruby', label: 'Ruby', emoji: '🔴', color: '#9b111e' },
@@ -71,12 +78,14 @@ function App() {
     { value: 'none', label: 'No Gemstone', emoji: '✨', color: '#eee' }
   ];
 
+
   const finishOptions = [
     { value: 'polished', label: 'High Polish', color: '#e2e8f0' },
     { value: 'matte', label: 'Matte/Brushed', color: '#94a3b8' },
     { value: 'hammered', label: 'Hammered', color: '#475569' },
     { value: 'engraved', label: 'Engraved', color: '#f59e0b' }
   ];
+
 
   // --- 1. INITIALIZATION & AUTH ---
   useEffect(() => {
@@ -89,6 +98,7 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
 
   // --- 2. API CALLS ---
   const fetchGallery = async (uid) => {
@@ -103,10 +113,11 @@ function App() {
     }
   };
 
+
   const loadCollection = async (category) => {
     setActiveCategory(category);
     setActiveTab('collections');
-    setMobileMenuOpen(false); // Close menu on mobile
+    setMobileMenuOpen(false);
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/collections?category=${category}`);
@@ -123,6 +134,7 @@ function App() {
     }
   };
 
+
   const handleDeleteTemplate = async (e, id) => {
     e.stopPropagation();
     if(!confirm("Delete this template?")) return;
@@ -136,6 +148,7 @@ function App() {
       setCollectionsData(originalData);
     }
   };
+
 
   const handleUploadTemplate = async () => {
     if (!newTemplateFile || !newTemplateName) return alert("Select file and name!");
@@ -166,6 +179,7 @@ function App() {
     }
   };
 
+
   const handleUseTemplate = async (templateUrl, templateName) => {
     setLoading(true);
     setStatusMessage("Loading template...");
@@ -185,7 +199,8 @@ function App() {
     }
   };
 
-  // --- 3. GENERATION LOGIC ---
+
+  // --- 3. GENERATION LOGIC (✅ UPDATED - Single API call to backend) ---
   const handleGenerateAll = async () => {
     if (sketchFiles.length === 0) return alert("Please upload a sketch!");
     setLoading(true); setError(""); setProgress({ current: 0, total: sketchFiles.length });
@@ -194,12 +209,13 @@ function App() {
     const logoB64 = await fileToBase64(logoFile);
 
     try {
-      const newItems = [];
       for (let i = 0; i < sketchFiles.length; i++) {
         try {
-          setStatusMessage(`Generating ${i+1}/${sketchFiles.length}...`);
+          setStatusMessage(`Generating ${i+1}/${sketchFiles.length}... (30-90 seconds)`);
           const sketchB64 = await fileToBase64(sketchFiles[i]);
-          const response = await fetch(`${API_BASE_URL}/generate_jewelry`, {
+          
+          // ✅ UPDATED: Pass userId, backend handles save automatically
+          const response = await fetch(`${API_BASE_URL}/generate_jewelry?userId=${user.uid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -210,33 +226,32 @@ function App() {
               mode: mode
             })
           });
+          
           if (!response.ok) throw new Error("Generation failed");
           const jsonData = await response.json();
-          const newItem = { 
-            imageUrl: jsonData.images[0], 
-            name: `Design for ${sketchFiles[i].name}`,
-            prompt: instructions,
-            createdAt: new Date().toISOString()
-          };
-          newItems.push(newItem);
-          await fetch(`${API_BASE_URL}/gallery?userId=${user.uid}`, {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify(newItem)
-          });
+          
+          // ✅ Backend saves automatically, just log success
+          if (jsonData.saved) {
+            console.log(`✅ Image ${i+1} saved to database`);
+          }
+          
         } catch (err) {
           console.error(err);
         }
         setProgress({ current: i + 1, total: sketchFiles.length });
       }
-      setUserGallery(prev => [...newItems, ...prev]);
-      if (newItems.length > 0) setActiveTab('gallery');
+      
+      // ✅ Refresh gallery from database
+      await fetchGallery(user.uid);
+      setActiveTab('gallery');
+      
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false); setStatusMessage(""); setProgress({ current: 0, total: 0 });
     }
   };
+
 
   // --- HELPERS ---
   const fileToBase64 = (file) => {
@@ -248,6 +263,7 @@ function App() {
       reader.onerror = reject;
     });
   };
+
 
   const compressImageForVideo = (base64Str) => {
     return new Promise((resolve) => {
@@ -264,6 +280,7 @@ function App() {
     });
   };
 
+
   const buildInstructions = () => {
     const metal = metalOptions.find(m => m.value === metalType)?.label || metalType;
     const gem = gemOptions.find(g => g.value === gemstone)?.label || gemstone;
@@ -275,12 +292,14 @@ function App() {
     return base;
   };
 
+
   // --- HANDLERS ---
   const handleSketchUpload = (e) => setSketchFiles(prev => [...prev, ...Array.from(e.target.files)]);
   const removeSketch = (idx) => setSketchFiles(prev => prev.filter((_, i) => i !== idx));
   const handlePersonUpload = (e) => setPersonFile(e.target.files[0]);
   const handleLogoUpload = (e) => setLogoFile(e.target.files[0]);
   const handleLogout = () => signOut(auth);
+
 
   const handleGenerateVideo = async (imageResult) => {
     setVideoModalOpen(true); setVideoStatus('queued'); setVideoLogs([]);
@@ -316,13 +335,16 @@ function App() {
   };
   const closeVideoModal = () => { clearInterval(pollIntervalRef.current); setVideoModalOpen(false); };
 
+
   if (authLoading) return <div className="dashboard-layout" style={{justifyContent:'center', alignItems:'center'}}>Loading...</div>;
   if (!user) return <Auth />;
+
 
   return (
     <div className="dashboard-layout">
       {/* MOBILE OVERLAY (To Close Menu) */}
       {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
+
 
       {/* 1. SIDEBAR (Hidden on mobile unless toggled) */}
       <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
@@ -332,6 +354,7 @@ function App() {
           {/* Close button for Mobile */}
           <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)}>✕</button>
         </div>
+
 
         <nav className="sidebar-nav">
           <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
@@ -349,6 +372,7 @@ function App() {
                   onClick={() => loadCollection('necklaces')}>Necklaces</button>
         </nav>
 
+
         <div className="user-profile" onClick={() => setShowProfileMenu(!showProfileMenu)}>
           {showProfileMenu && (
             <div className="profile-menu">
@@ -364,11 +388,13 @@ function App() {
         </div>
       </aside>
 
+
       {/* 2. MAIN CONTENT */}
       <main className="main-content">
         <header className="top-header">
           {/* HAMBURGER BUTTON (Mobile Only) */}
           <button className="hamburger-btn" onClick={() => setMobileMenuOpen(true)}>☰</button>
+
 
           <h2 className="page-title">
              {activeTab === 'create' && 'Design Studio'}
@@ -385,9 +411,11 @@ function App() {
           )}
         </header>
 
+
         <div className="content-scroll-area">
           {error && <div className="error-banner">{error}</div>}
           {statusMessage && <div style={{textAlign:'center', marginBottom:'1rem', color:'#64748b'}}>{statusMessage}</div>}
+
 
           {/* COLLECTIONS VIEW */}
           {activeTab === 'collections' && (
@@ -420,6 +448,7 @@ function App() {
                 </div>
              </div>
           )}
+
 
           {/* CREATE VIEW */}
           {activeTab === 'create' && (
@@ -465,6 +494,7 @@ function App() {
             </div>
           )}
 
+
           {/* GALLERY VIEW */}
           {activeTab === 'gallery' && (
             <div className="gallery-container">
@@ -489,6 +519,7 @@ function App() {
         </div>
       </main>
 
+
       {/* VIDEO MODAL */}
       {videoModalOpen && (
          <div className="modal-backdrop">
@@ -511,5 +542,6 @@ function App() {
     </div>
   );
 }
+
 
 export default App;
