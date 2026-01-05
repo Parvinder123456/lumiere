@@ -189,10 +189,7 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 /* MOBILE FLOATING GENERATE BUTTON */
 .mobile-fab-container { display: none; }
 
-/* ===================================================================
-   ANIMATIONS & CONTAINERS (SPINNERS, VIDEO)
-   =================================================================== */
-
+/* ANIMATIONS & CONTAINERS (SPINNERS, VIDEO) */
 .spinner-ring {
   width: 40px;
   height: 40px;
@@ -229,11 +226,7 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   object-fit: contain;
 }
 
-/* ===================================================================
-   FIX: COMPACT UPLOAD CARD & TRUNCATION (HARDENED)
-   =================================================================== */
-
-/* 1. Shrink the upload zone when files are present */
+/* FIX: COMPACT UPLOAD CARD & TRUNCATION (HARDENED) */
 .upload-zone.has-files {
   flex: 0 0 auto;         
   min-height: 60px;      
@@ -254,7 +247,6 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   padding: 1rem;
 }
 
-/* 2. BULLETPROOF TRUNCATION */
 .file-tag {
   background: white;
   border: 1px solid var(--border);
@@ -263,13 +255,11 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   font-size: 0.9rem;
   z-index: 3;
   position: relative;
-  
-  /* Flexbox settings to force size */
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: auto;
-  max-width: 100%; /* NEVER exceed parent */
+  max-width: 100%;
   box-sizing: border-box;
 }
 
@@ -278,10 +268,8 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  
-  /* The "Magic" Flexbox combo for truncation */
   flex: 1;
-  min-width: 0; /* Forces text to shrink if container is small */
+  min-width: 0;
 }
 
 .remove-btn {
@@ -289,11 +277,11 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   cursor: pointer;
   color: #ef4444;
   font-weight: bold;
-  flex-shrink: 0; /* Ensure button never squishes */
+  flex-shrink: 0;
 }
 
 /* ===================================================================
-   RESPONSIVE MOBILE
+   RESPONSIVE MOBILE - HORIZONTAL SCROLL FIX
    =================================================================== */
 @media (max-width: 900px) {
   .sidebar {
@@ -314,32 +302,65 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   .top-header { padding: 0 1rem; height: 70px; }
   .page-title { font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
   
-  /* IPHONE KEYBOARD FIX */
   .content-scroll-area { 
     padding: 0.75rem;
-    padding-bottom: 300px; 
+    padding-bottom: 300px;
+    overflow-x: hidden; /* CRITICAL FIX */
   }
 
-  .grid-layout { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-  .card { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 10px; }
+  .grid-layout { 
+    grid-template-columns: 1fr 1fr; 
+    gap: 0.5rem;
+    max-width: 100%; /* CRITICAL FIX */
+    overflow: hidden; /* CRITICAL FIX */
+  }
+  
+  .card { 
+    padding: 0.75rem; 
+    margin-bottom: 0.5rem; 
+    border-radius: 10px;
+    max-width: 100%; /* CRITICAL FIX */
+    overflow: hidden; /* CRITICAL FIX */
+    word-wrap: break-word; /* CRITICAL FIX */
+  }
   .card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
   
-  /* UPLOAD CARD FIXES */
   .upload-card-lg { min-height: auto; } 
   .upload-zone label { padding: 0.5rem; }
   .upload-icon-lg { font-size: 1.5rem; margin-bottom: 0.25rem; }
   .upload-zone label span { font-size: 0.75rem; }
   
+  /* ✅ CRITICAL HORIZONTAL SCROLL FIX */
   .file-list-preview {
     padding: 0.5rem 0 0 0;
-    justify-content: flex-start; /* Align left on mobile */
+    justify-content: flex-start;
+    max-width: 100%; /* CRITICAL FIX */
+    overflow: hidden; /* CRITICAL FIX */
   }
   
   .file-tag {
     font-size: 0.75rem;
     padding: 4px 8px;
     background: #f1f5f9;
-    width: 100%; /* Force full width so it doesn't fight for space */
+    width: 100%; /* CRITICAL FIX */
+    max-width: 100%; /* CRITICAL FIX */
+    overflow: hidden; /* CRITICAL FIX */
+  }
+
+  /* ✅ FILENAME TRUNCATION FIX */
+  .file-name-truncate {
+    white-space: nowrap; /* CRITICAL FIX */
+    overflow: hidden; /* CRITICAL FIX */
+    text-overflow: ellipsis; /* CRITICAL FIX */
+    flex: 1;
+    min-width: 0; /* CRITICAL FIX */
+    max-width: calc(100% - 30px); /* CRITICAL FIX - leaves room for X button */
+  }
+
+  .remove-btn {
+    flex-shrink: 0; /* CRITICAL FIX */
+    width: 20px; /* CRITICAL FIX */
+    text-align: center;
   }
 
   .text-input { padding: 0.5rem; font-size: 0.8rem; min-height: 60px; }
@@ -369,10 +390,8 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   .card-header { margin-bottom: 0.5rem; }
   .req { font-size: 0.85rem; }
 
-  /* HIDE DESKTOP GENERATE BUTTON */
   .desktop-gen-btn { display: none; }
 
-  /* MOBILE FLOATING GENERATE BUTTON */
   .mobile-fab-container {
     display: flex;
     position: fixed;
