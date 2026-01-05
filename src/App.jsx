@@ -22,6 +22,9 @@ function App() {
   const [collectionsData, setCollectionsData] = useState([]);
   const [userGallery, setUserGallery] = useState([]);
   
+  // ✅ CLIENT-SIDE PAGINATION STATE (Optimization #1)
+  const [visibleGalleryCount, setVisibleGalleryCount] = useState(12);
+
   // --- CREATE STATE ---
   const [sketchFiles, setSketchFiles] = useState([]);
   const [personFile, setPersonFile] = useState(null);
@@ -41,10 +44,7 @@ function App() {
   const [metalType, setMetalType] = useState('yellow-gold');
   const [gemstone, setGemstone] = useState('diamond');
   const [finish, setFinish] = useState('polished');
-  
-  // ✅ OUTFIT STATE (Defaults to 'none')
   const [outfit, setOutfit] = useState('none'); 
-  
   const [customPrompt, setCustomPrompt] = useState('');
 
   // --- VIDEO GENERATION STATE ---
@@ -59,7 +59,6 @@ function App() {
   const pollIntervalRef = useRef(null);
 
   // --- UI OPTIONS ARRAYS ---
-  
   const metalOptions = [
     { value: 'none', label: 'Original/None', emoji: '🚫', color: '#fff' },
     { value: 'yellow-gold', label: 'Yellow Gold', emoji: '🟡', color: '#E6C200' },
@@ -85,7 +84,6 @@ function App() {
     { value: 'engraved', label: 'Engraved', color: '#f59e0b' }
   ];
 
-  // ✅ UPDATED: Removed Emojis for Classy Look
   const outfitOptions = [
     { value: 'none', label: 'No Change / None' },
     { value: 'evening-gown', label: 'Evening Gown' },
@@ -108,28 +106,16 @@ function App() {
   }, []);
 
   // --- 2. API CALLS ---
-  // ✅ UPDATED: Added spinner logic to fetchGallery
   const fetchGallery = async (uid) => {
-    setLoading(true); 
     try {
       const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
       if (res.ok) {
         const data = await res.json();
         setUserGallery(data);
+        setVisibleGalleryCount(12); // Reset count on new fetch
       }
     } catch (err) {
       console.warn("Gallery fetch failed");
-    } finally {
-      setLoading(false); 
-    }
-  };
-
-  // ✅ ADDED: Handler for Gallery Navigation
-  const handleGalleryClick = () => {
-    setActiveTab('gallery');
-    setMobileMenuOpen(false);
-    if (user) {
-      fetchGallery(user.uid);
     }
   };
 
@@ -196,7 +182,6 @@ function App() {
     }
   };
 
-  // ✅ UPDATED: Added Scroll to Top
   const handleUseTemplate = async (templateUrl, templateName) => {
     setLoading(true);
     setStatusMessage("Loading template...");
@@ -208,10 +193,7 @@ function App() {
       setMode('product');
       setActiveTab('create');
       setError("");
-      
-      // Scroll to top for UX
       window.scrollTo({ top: 0, behavior: 'smooth' });
-
     } catch (err) {
       setError("Failed to load template.");
     } finally {
@@ -294,16 +276,13 @@ function App() {
     });
   };
 
-  // ✅ UPDATED: Safer Canvas CORS Handling
   const compressImageForVideo = (base64Str) => {
     return new Promise((resolve) => {
-      // If it's already a data URL (local upload), just return it
       if(base64Str.startsWith('data:')) return resolve(base64Str);
-
+      
       const img = new Image();
       img.src = base64Str;
       img.crossOrigin = "anonymous"; 
-      
       img.onload = () => {
         try {
             const canvas = document.createElement('canvas');
@@ -314,14 +293,10 @@ function App() {
             resolve(canvas.toDataURL('image/jpeg', 0.85));
         } catch (e) {
             console.warn("CORS/Canvas error, sending original URL", e);
-            resolve(base64Str); // Fallback to original URL
+            resolve(base64Str);
         }
       };
-      
-      img.onerror = () => {
-          console.warn("Image load error, sending original URL");
-          resolve(base64Str); 
-      }
+      img.onerror = () => resolve(base64Str); 
     });
   };
 
@@ -466,8 +441,7 @@ function App() {
           <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
             <span className="icon">✨</span> Create Design
           </button>
-          {/* ✅ UPDATED: Trigger spinner on click */}
-          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={handleGalleryClick}>
+          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => {setActiveTab('gallery'); setMobileMenuOpen(false);}}>
             <span className="icon">🖼️</span> My Gallery
           </button>
           
@@ -551,7 +525,7 @@ function App() {
                         collectionsData.map((item, idx) => (
                            <div key={idx} className="gallery-card">
                               <div className="img-wrapper">
-                                 <img src={item.url} alt={item.name} loading="lazy" />
+                                 <img src={item.url} alt={item.name} loading="lazy" decoding="async" />
                                  <div className="overlay">
                                     <button className="btn-primary" onClick={() => handleUseTemplate(item.url, item.name)}>✨ Use</button>
                                     <button className="delete-btn-overlay" onClick={(e) => handleDeleteTemplate(e, item.id)} title="Delete">🗑️</button>
@@ -637,30 +611,35 @@ function App() {
 
           {activeTab === 'gallery' && (
             <div className="gallery-container">
-               {/* ✅ UPDATED: Added Loading State for Gallery */}
-               {loading ? (
-                  <div className="empty-state">
-                     <div className="spinner-ring" style={{margin:'0 auto 1rem auto'}}></div>
-                     <p>Loading your designs...</p>
-                  </div>
-               ) : (
-                  userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
-                  <div className="gallery-grid">
-                      {userGallery.map((img, idx) => (
-                        <div key={idx} className="gallery-card">
-                           <div className="img-wrapper">
-                              <img src={img.imageUrl || img.url} alt={img.name} loading="lazy" />
-                              <div className="overlay">
-                                 <button className="icon-btn" onClick={() => handleGenerateVideo(img)} title="Create Video">🎬</button>
-                                 <a href={img.imageUrl || img.url} download className="icon-btn" title="Download">⬇️</a>
-                                 <button className="delete-btn-gallery" onClick={(e) => handleDeleteGalleryItem(e, img.id)} title="Delete">🗑️</button>
-                              </div>
-                           </div>
-                           <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
-                        </div>
-                      ))}
-                  </div>
-               )}
+                  {userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
+                  <>
+                    <div className="gallery-grid">
+                        {/* ✅ OPTIMIZATION #1: Renders only a subset of images */}
+                        {userGallery.slice(0, visibleGalleryCount).map((img, idx) => (
+                          <div key={idx} className="gallery-card">
+                            <div className="img-wrapper">
+                                {/* ✅ OPTIMIZATION #2: Async decoding */}
+                                <img src={img.imageUrl || img.url} alt={img.name} loading="lazy" decoding="async" />
+                                <div className="overlay">
+                                  <button className="icon-btn" onClick={() => handleGenerateVideo(img)} title="Create Video">🎬</button>
+                                  <a href={img.imageUrl || img.url} download className="icon-btn" title="Download">⬇️</a>
+                                  <button className="delete-btn-gallery" onClick={(e) => handleDeleteGalleryItem(e, img.id)} title="Delete">🗑️</button>
+                                </div>
+                            </div>
+                            <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
+                          </div>
+                        ))}
+                    </div>
+                    {/* ✅ LOAD MORE BUTTON */}
+                    {visibleGalleryCount < userGallery.length && (
+                      <div className="load-more-container">
+                        <button className="btn-load-more" onClick={() => setVisibleGalleryCount(prev => prev + 12)}>
+                           Load More ({userGallery.length - visibleGalleryCount} remaining)
+                        </button>
+                      </div>
+                    )}
+                  </>
+               }
             </div>
           )}
         </div>
