@@ -92,18 +92,17 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 
 .text-input { width: 100%; padding: 1rem; border: 2px solid var(--border); border-radius: 8px; font-family: var(--font-body); resize: vertical; min-height: 120px; font-size: 1rem; }
 
-/* ✅ CLASSY SELECT INPUT - FIXED SIZE & ARROW */
+/* ✅ CLASSY SELECT INPUT - FIXED FOR MOBILE */
 .select-input { 
   width: 100%; 
-  padding: 0.8rem 1rem; /* Slightly reduced vertical padding */
-  padding-right: 3rem;  /* CRITICAL: Space for the arrow so text doesn't hide it */
-  border: 2px solid var(--border); 
+  padding: 1rem; 
+  border: 2px solid var(--border); /* Matches Text Input border */
   border-radius: 8px; 
   background: white; 
   
-  /* FONT FIX: Matches "Details..." size */
-  font-family: var(--font-body); 
-  font-size: 0.9rem;    /* Reduced from 1rem to look cleaner */
+  /* FORCE FONT MATCHING */
+  font-family: var(--font-body); /* Ensures Inter font, not default Serif */
+  font-size: 1rem;
   color: var(--text-dark);
   
   /* REMOVE DEFAULT BROWSER ARROW */
@@ -116,8 +115,9 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
   background-repeat: no-repeat;
   background-position: right 1rem center;
-  background-size: 0.7rem auto; /* Slightly smaller arrow */
+  background-size: 0.8rem auto;
 }
+
 .select-input:focus {
   outline: none;
   border-color: var(--primary);
@@ -196,10 +196,10 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 .progress-text { font-size: 0.9rem; color: var(--text-light); font-weight: 500; }
 
 /* MOBILE FLOATING GENERATE BUTTON */
-.mobile-fab-container { display: none; /* Hidden on desktop */ }
+.mobile-fab-container { display: none; }
 
 /* ===================================================================
-   ✅ ANIMATIONS & CONTAINERS
+   MISSING ANIMATIONS & CONTAINERS (ADDED)
    =================================================================== */
 
 /* SPINNER ANIMATION */
@@ -245,16 +245,30 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
    RESPONSIVE MOBILE
    =================================================================== */
 @media (max-width: 900px) {
-  .sidebar { position: fixed; top: 0; left: 0; height: 100%; width: 280px; transform: translateX(-100%); box-shadow: 2px 0 20px rgba(0,0,0,0.5); z-index: 1000; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; height: 100%; width: 280px;
+    transform: translateX(-100%); 
+    box-shadow: 2px 0 20px rgba(0,0,0,0.5);
+    z-index: 1000;
+  }
   .sidebar.open { transform: translateX(0); }
+  
   .hamburger-btn { display: block; }
   .mobile-close-btn { display: block; }
-  .mobile-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 900; }
+  
+  .mobile-overlay {
+    display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 900;
+  }
+
   .top-header { padding: 0 1rem; height: 70px; }
   .page-title { font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
   
   /* IPHONE KEYBOARD FIX */
-  .content-scroll-area { padding: 0.75rem; padding-bottom: 300px; }
+  .content-scroll-area { 
+    padding: 0.75rem;
+    padding-bottom: 300px; 
+  }
+
   .grid-layout { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .card { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 10px; }
   .card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
@@ -267,11 +281,7 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   .text-input { padding: 0.5rem; font-size: 0.8rem; min-height: 60px; }
   
   /* Select input mobile tweaks */
-  .select-input { 
-      padding: 0.75rem; 
-      padding-right: 2.5rem; /* Ensure arrow space on mobile */
-      font-size: 0.9rem;     /* Force smaller font on mobile */
-  }
+  .select-input { padding: 0.75rem; font-size: 0.95rem; }
   
   .pill-group { padding: 2px; }
   .pill { padding: 6px; font-size: 0.75rem; }
@@ -302,8 +312,23 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   .desktop-gen-btn { display: none; }
 
   /* MOBILE FLOATING GENERATE BUTTON */
-  .mobile-fab-container { display: flex; position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
-  .btn-fab { box-shadow: 0 10px 20px rgba(245, 158, 11, 0.4); border-radius: 50px; padding: 1rem 2rem; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; animation: bounceIn 0.3s ease-out; }
+  .mobile-fab-container {
+    display: flex;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+  }
+  .btn-fab {
+    box-shadow: 0 10px 20px rgba(245, 158, 11, 0.4);
+    border-radius: 50px;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: bounceIn 0.3s ease-out;
+  }
 
   @keyframes bounceIn {
     0% { transform: scale(0); }

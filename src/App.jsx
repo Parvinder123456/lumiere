@@ -42,7 +42,7 @@ function App() {
   const [gemstone, setGemstone] = useState('diamond');
   const [finish, setFinish] = useState('polished');
   
-  // ✅ OUTFIT STATE (Defaults to 'none')
+  // ✅ OUTFIT STATE
   const [outfit, setOutfit] = useState('none'); 
   
   const [customPrompt, setCustomPrompt] = useState('');
@@ -85,7 +85,6 @@ function App() {
     { value: 'engraved', label: 'Engraved', color: '#f59e0b' }
   ];
 
-  // ✅ UPDATED: Removed Emojis for Classy Look
   const outfitOptions = [
     { value: 'none', label: 'No Change / None' },
     { value: 'evening-gown', label: 'Evening Gown' },
@@ -108,9 +107,8 @@ function App() {
   }, []);
 
   // --- 2. API CALLS ---
-  // ✅ UPDATED: Added spinner logic to fetchGallery
   const fetchGallery = async (uid) => {
-    setLoading(true); 
+    setLoading(true); // ✅ Start Loading Spinner
     try {
       const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
       if (res.ok) {
@@ -120,16 +118,7 @@ function App() {
     } catch (err) {
       console.warn("Gallery fetch failed");
     } finally {
-      setLoading(false); 
-    }
-  };
-
-  // ✅ ADDED: Handler for Gallery Navigation
-  const handleGalleryClick = () => {
-    setActiveTab('gallery');
-    setMobileMenuOpen(false);
-    if (user) {
-      fetchGallery(user.uid);
+      setLoading(false); // ✅ Stop Loading Spinner
     }
   };
 
@@ -150,6 +139,14 @@ function App() {
       setCollectionsData([]); 
     } finally {
       setLoading(false); 
+    }
+  };
+
+  const handleGalleryClick = () => {
+    setActiveTab('gallery');
+    setMobileMenuOpen(false);
+    if (user) {
+      fetchGallery(user.uid); // ✅ Triggers spinner logic
     }
   };
 
@@ -196,7 +193,6 @@ function App() {
     }
   };
 
-  // ✅ UPDATED: Added Scroll to Top
   const handleUseTemplate = async (templateUrl, templateName) => {
     setLoading(true);
     setStatusMessage("Loading template...");
@@ -209,9 +205,8 @@ function App() {
       setActiveTab('create');
       setError("");
       
-      // Scroll to top for UX
+      // ✅ Scroll to top for better mobile UX
       window.scrollTo({ top: 0, behavior: 'smooth' });
-
     } catch (err) {
       setError("Failed to load template.");
     } finally {
@@ -294,16 +289,13 @@ function App() {
     });
   };
 
-  // ✅ UPDATED: Safer Canvas CORS Handling
   const compressImageForVideo = (base64Str) => {
     return new Promise((resolve) => {
-      // If it's already a data URL (local upload), just return it
       if(base64Str.startsWith('data:')) return resolve(base64Str);
-
+      
       const img = new Image();
       img.src = base64Str;
       img.crossOrigin = "anonymous"; 
-      
       img.onload = () => {
         try {
             const canvas = document.createElement('canvas');
@@ -314,14 +306,10 @@ function App() {
             resolve(canvas.toDataURL('image/jpeg', 0.85));
         } catch (e) {
             console.warn("CORS/Canvas error, sending original URL", e);
-            resolve(base64Str); // Fallback to original URL
+            resolve(base64Str);
         }
       };
-      
-      img.onerror = () => {
-          console.warn("Image load error, sending original URL");
-          resolve(base64Str); 
-      }
+      img.onerror = () => resolve(base64Str); 
     });
   };
 
@@ -466,7 +454,6 @@ function App() {
           <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
             <span className="icon">✨</span> Create Design
           </button>
-          {/* ✅ UPDATED: Trigger spinner on click */}
           <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={handleGalleryClick}>
             <span className="icon">🖼️</span> My Gallery
           </button>
@@ -637,7 +624,7 @@ function App() {
 
           {activeTab === 'gallery' && (
             <div className="gallery-container">
-               {/* ✅ UPDATED: Added Loading State for Gallery */}
+               {/* ADDED LOADING CHECK HERE */}
                {loading ? (
                   <div className="empty-state">
                      <div className="spinner-ring" style={{margin:'0 auto 1rem auto'}}></div>
