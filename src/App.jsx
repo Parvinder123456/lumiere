@@ -108,7 +108,9 @@ function App() {
   }, []);
 
   // --- 2. API CALLS ---
+  // ✅ UPDATED: Added spinner logic to fetchGallery
   const fetchGallery = async (uid) => {
+    setLoading(true); 
     try {
       const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
       if (res.ok) {
@@ -117,6 +119,17 @@ function App() {
       }
     } catch (err) {
       console.warn("Gallery fetch failed");
+    } finally {
+      setLoading(false); 
+    }
+  };
+
+  // ✅ ADDED: Handler for Gallery Navigation
+  const handleGalleryClick = () => {
+    setActiveTab('gallery');
+    setMobileMenuOpen(false);
+    if (user) {
+      fetchGallery(user.uid);
     }
   };
 
@@ -183,6 +196,7 @@ function App() {
     }
   };
 
+  // ✅ UPDATED: Added Scroll to Top
   const handleUseTemplate = async (templateUrl, templateName) => {
     setLoading(true);
     setStatusMessage("Loading template...");
@@ -194,6 +208,10 @@ function App() {
       setMode('product');
       setActiveTab('create');
       setError("");
+      
+      // Scroll to top for UX
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (err) {
       setError("Failed to load template.");
     } finally {
@@ -276,20 +294,34 @@ function App() {
     });
   };
 
+  // ✅ UPDATED: Safer Canvas CORS Handling
   const compressImageForVideo = (base64Str) => {
     return new Promise((resolve) => {
+      // If it's already a data URL (local upload), just return it
+      if(base64Str.startsWith('data:')) return resolve(base64Str);
+
       const img = new Image();
       img.src = base64Str;
       img.crossOrigin = "anonymous"; 
+      
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width; canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        } catch (e) {
+            console.warn("CORS/Canvas error, sending original URL", e);
+            resolve(base64Str); // Fallback to original URL
+        }
       };
-      img.onerror = () => resolve(base64Str); 
+      
+      img.onerror = () => {
+          console.warn("Image load error, sending original URL");
+          resolve(base64Str); 
+      }
     });
   };
 
@@ -434,7 +466,8 @@ function App() {
           <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
             <span className="icon">✨</span> Create Design
           </button>
-          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => {setActiveTab('gallery'); setMobileMenuOpen(false);}}>
+          {/* ✅ UPDATED: Trigger spinner on click */}
+          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={handleGalleryClick}>
             <span className="icon">🖼️</span> My Gallery
           </button>
           
@@ -604,9 +637,16 @@ function App() {
 
           {activeTab === 'gallery' && (
             <div className="gallery-container">
-               {userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
+               {/* ✅ UPDATED: Added Loading State for Gallery */}
+               {loading ? (
+                  <div className="empty-state">
+                     <div className="spinner-ring" style={{margin:'0 auto 1rem auto'}}></div>
+                     <p>Loading your designs...</p>
+                  </div>
+               ) : (
+                  userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
                   <div className="gallery-grid">
-                     {userGallery.map((img, idx) => (
+                      {userGallery.map((img, idx) => (
                         <div key={idx} className="gallery-card">
                            <div className="img-wrapper">
                               <img src={img.imageUrl || img.url} alt={img.name} loading="lazy" />
@@ -618,9 +658,9 @@ function App() {
                            </div>
                            <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
                         </div>
-                     ))}
+                      ))}
                   </div>
-               }
+               )}
             </div>
           )}
         </div>
@@ -650,13 +690,13 @@ function App() {
                  <>
                    <div className="video-display">
                       {videoStatus === 'completed' && videoResult ? (
-                         <div className="video-success-container"><video src={videoResult} controls autoPlay loop className="final-video" /></div>
+                          <div className="video-success-container"><video src={videoResult} controls autoPlay loop className="final-video" /></div>
                       ) : (
-                         <div className="video-loader">
-                            <div className={`spinner-ring ${videoStatus === 'failed' ? 'error' : ''}`}></div>
-                            <h4>{videoStatus === 'processing' ? 'Rendering...' : 'Waiting...'}</h4>
-                            <p style={{fontSize:'0.8rem', color:'#64748b', marginTop:'10px', maxWidth:'90%', marginInline:'auto'}}>"{videoPrompt.substring(0, 60)}..."</p>
-                         </div>
+                          <div className="video-loader">
+                             <div className={`spinner-ring ${videoStatus === 'failed' ? 'error' : ''}`}></div>
+                             <h4>{videoStatus === 'processing' ? 'Rendering...' : 'Waiting...'}</h4>
+                             <p style={{fontSize:'0.8rem', color:'#64748b', marginTop:'10px', maxWidth:'90%', marginInline:'auto'}}>"{videoPrompt.substring(0, 60)}..."</p>
+                          </div>
                       )}
                    </div>
                    <div className="terminal-logs">{videoLogs.map((log, i) => <div key={i} className={`log-line ${log.type}`}>[{log.time}] {log.message}</div>)}</div>
