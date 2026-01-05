@@ -86,32 +86,23 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 .upload-zone input { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2; }
 .upload-zone label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-light); z-index: 1; }
 .upload-icon-lg { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-.file-list-preview { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 1rem; }
-.file-tag { background: white; border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; z-index: 3; position: relative; display: flex; align-items: center; gap: 8px; }
-.file-tag span { cursor: pointer; color: #ef4444; font-weight: bold; }
 
 .text-input { width: 100%; padding: 1rem; border: 2px solid var(--border); border-radius: 8px; font-family: var(--font-body); resize: vertical; min-height: 120px; font-size: 1rem; }
 
-/* ✅ CLASSY SELECT INPUT - FIXED FOR MOBILE */
+/* ✅ CLASSY SELECT INPUT */
 .select-input { 
   width: 100%; 
   padding: 1rem; 
-  border: 2px solid var(--border); /* Matches Text Input border */
+  border: 2px solid var(--border); 
   border-radius: 8px; 
   background: white; 
-  
-  /* FORCE FONT MATCHING */
-  font-family: var(--font-body); /* Ensures Inter font, not default Serif */
+  font-family: var(--font-body);
   font-size: 1rem;
   color: var(--text-dark);
-  
-  /* REMOVE DEFAULT BROWSER ARROW */
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
   cursor: pointer;
-
-  /* CUSTOM ARROW ICON */
   background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
   background-repeat: no-repeat;
   background-position: right 1rem center;
@@ -239,39 +230,67 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 }
 
 /* ===================================================================
-   FIX: COMPACT UPLOAD CARD & TRUNCATION
+   FIX: COMPACT UPLOAD CARD & TRUNCATION (HARDENED)
    =================================================================== */
 
-/* 1. Truncate long filenames */
-.file-name-truncate {
-  display: inline-block;
-  max-width: 120px;       /* Forces long names to cut off */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis; /* Adds '...' at the end */
-  vertical-align: middle;
-}
-
-.remove-btn {
-  margin-left: 6px;
-  cursor: pointer;
-  color: #ef4444;
-  font-weight: bold;
-}
-
-/* 2. Shrink the upload zone when files are present */
+/* 1. Shrink the upload zone when files are present */
 .upload-zone.has-files {
-  flex: 0 0 auto;         /* Stop it from taking all space */
-  min-height: 60px;       /* Much smaller height */
+  flex: 0 0 auto;         
+  min-height: 60px;      
   margin-bottom: 0.5rem;
 }
 
 .upload-zone.has-files label {
-  flex-direction: row;    /* Horizontal layout to save vertical space */
+  flex-direction: row;   
   gap: 10px;
   padding: 0.5rem;
 }
 
+.file-list-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* 2. BULLETPROOF TRUNCATION */
+.file-tag {
+  background: white;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  z-index: 3;
+  position: relative;
+  
+  /* Flexbox settings to force size */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: auto;
+  max-width: 100%; /* NEVER exceed parent */
+  box-sizing: border-box;
+}
+
+.file-name-truncate {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  
+  /* The "Magic" Flexbox combo for truncation */
+  flex: 1;
+  min-width: 0; /* Forces text to shrink if container is small */
+}
+
+.remove-btn {
+  margin-left: 8px;
+  cursor: pointer;
+  color: #ef4444;
+  font-weight: bold;
+  flex-shrink: 0; /* Ensure button never squishes */
+}
 
 /* ===================================================================
    RESPONSIVE MOBILE
@@ -305,34 +324,26 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   .card { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 10px; }
   .card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
   
-  /* FIX FOR UPLOAD CARD SCROLLING ISSUE */
-  .upload-card-lg { min-height: auto; } /* Allow card to shrink freely */
-  
+  /* UPLOAD CARD FIXES */
+  .upload-card-lg { min-height: auto; } 
   .upload-zone label { padding: 0.5rem; }
   .upload-icon-lg { font-size: 1.5rem; margin-bottom: 0.25rem; }
   .upload-zone label span { font-size: 0.75rem; }
   
-  /* File List Fixes for Mobile */
   .file-list-preview {
     padding: 0.5rem 0 0 0;
-    justify-content: flex-start;
+    justify-content: flex-start; /* Align left on mobile */
   }
+  
   .file-tag {
     font-size: 0.75rem;
     padding: 4px 8px;
     background: #f1f5f9;
-    width: 100%; /* Full width on very small screens looks neater */
-    justify-content: space-between;
-  }
-  .file-name-truncate {
-    max-width: 200px; /* More space since it's full width now */
+    width: 100%; /* Force full width so it doesn't fight for space */
   }
 
   .text-input { padding: 0.5rem; font-size: 0.8rem; min-height: 60px; }
-  
-  /* Select input mobile tweaks */
   .select-input { padding: 0.75rem; font-size: 0.95rem; }
-  
   .pill-group { padding: 2px; }
   .pill { padding: 6px; font-size: 0.75rem; }
   .mini-upload label { padding: 0.75rem; font-size: 0.75rem; }

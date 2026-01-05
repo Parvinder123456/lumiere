@@ -86,7 +86,7 @@ function App() {
   ];
 
   const outfitOptions = [
-    { value: 'none', label: 'No Change / None' },
+    { value: 'none', label: 'None' },
     { value: 'evening-gown', label: 'Evening Gown' },
     { value: 'professional-suit', label: 'Power Suit' },
     { value: 'casual-chic', label: 'Casual Chic' },
@@ -108,7 +108,7 @@ function App() {
 
   // --- 2. API CALLS ---
   const fetchGallery = async (uid) => {
-    setLoading(true); // ✅ Start Loading Spinner
+    setLoading(true); 
     try {
       const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
       if (res.ok) {
@@ -118,7 +118,7 @@ function App() {
     } catch (err) {
       console.warn("Gallery fetch failed");
     } finally {
-      setLoading(false); // ✅ Stop Loading Spinner
+      setLoading(false); 
     }
   };
 
@@ -145,8 +145,12 @@ function App() {
   const handleGalleryClick = () => {
     setActiveTab('gallery');
     setMobileMenuOpen(false);
-    if (user) {
-      fetchGallery(user.uid); // ✅ Triggers spinner logic
+    
+    // ✅ FIXED: We no longer force a re-fetch here.
+    // The data is already in 'userGallery' state.
+    // It will only load if empty (optional safety check)
+    if (user && userGallery.length === 0) {
+       fetchGallery(user.uid);
     }
   };
 
