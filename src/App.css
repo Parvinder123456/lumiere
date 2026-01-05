@@ -233,12 +233,12 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 }
 
 /* ===================================================================
-   SIMPLE TRUNCATION FIX
+   SIMPLE TRUNCATION FIX (UPDATED TO BE SHORTER)
    =================================================================== */
 
 .truncated-text {
   display: inline-block;
-  max-width: 140px; /* Forces text to cut off */
+  max-width: 100px; /* Reduced from 140px for desktop */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis; /* Adds the ... */
@@ -248,7 +248,7 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 /* Make it even smaller on mobile to prevent layout breaking */
 @media (max-width: 600px) {
   .truncated-text {
-    max-width: 110px; 
+    max-width: 80px; /* Reduced to 80px for mobile */
   }
 }
 
