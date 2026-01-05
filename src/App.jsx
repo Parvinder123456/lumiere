@@ -146,9 +146,7 @@ function App() {
     setActiveTab('gallery');
     setMobileMenuOpen(false);
     
-    // ✅ FIXED: We no longer force a re-fetch here.
-    // The data is already in 'userGallery' state.
-    // It will only load if empty (optional safety check)
+    // ✅ FIXED: Only load if we don't have data, to prevent infinite spinner
     if (user && userGallery.length === 0) {
        fetchGallery(user.uid);
     }
@@ -575,15 +573,17 @@ function App() {
                     </div>
 
                     {sketchFiles.length > 0 && (
-                        <div className="file-list-preview">
+                        <div className="file-list-preview" style={{marginTop:'15px'}}>
                             {sketchFiles.map((f, i) => (
                                 <div key={i} className="file-tag">
-                                    <span className="file-name-truncate">{f.name}</span> 
-                                    <span className="remove-btn" onClick={(e) => { 
+                                    {/* ✅ APPLIED TRUNCATED CLASS HERE */}
+                                    <span className="truncated-text">{f.name}</span> 
+                                    
+                                    <span onClick={(e) => { 
                                         e.preventDefault(); 
                                         e.stopPropagation(); 
                                         removeSketch(i); 
-                                    }}>✕</span>
+                                    }} style={{cursor:'pointer', color:'#ef4444', marginLeft:'8px', fontWeight:'bold'}}>✕</span>
                                 </div>
                             ))}
                         </div>
