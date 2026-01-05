@@ -22,9 +22,6 @@ function App() {
   const [collectionsData, setCollectionsData] = useState([]);
   const [userGallery, setUserGallery] = useState([]);
   
-  // ✅ CLIENT-SIDE PAGINATION STATE (Optimization #1)
-  const [visibleGalleryCount, setVisibleGalleryCount] = useState(12);
-
   // --- CREATE STATE ---
   const [sketchFiles, setSketchFiles] = useState([]);
   const [personFile, setPersonFile] = useState(null);
@@ -44,7 +41,10 @@ function App() {
   const [metalType, setMetalType] = useState('yellow-gold');
   const [gemstone, setGemstone] = useState('diamond');
   const [finish, setFinish] = useState('polished');
+  
+  // ✅ OUTFIT STATE
   const [outfit, setOutfit] = useState('none'); 
+  
   const [customPrompt, setCustomPrompt] = useState('');
 
   // --- VIDEO GENERATION STATE ---
@@ -59,6 +59,7 @@ function App() {
   const pollIntervalRef = useRef(null);
 
   // --- UI OPTIONS ARRAYS ---
+  
   const metalOptions = [
     { value: 'none', label: 'Original/None', emoji: '🚫', color: '#fff' },
     { value: 'yellow-gold', label: 'Yellow Gold', emoji: '🟡', color: '#E6C200' },
@@ -107,15 +108,17 @@ function App() {
 
   // --- 2. API CALLS ---
   const fetchGallery = async (uid) => {
+    setLoading(true); // ✅ Start Loading Spinner
     try {
       const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
       if (res.ok) {
         const data = await res.json();
         setUserGallery(data);
-        setVisibleGalleryCount(12); // Reset count on new fetch
       }
     } catch (err) {
       console.warn("Gallery fetch failed");
+    } finally {
+      setLoading(false); // ✅ Stop Loading Spinner
     }
   };
 
@@ -136,6 +139,14 @@ function App() {
       setCollectionsData([]); 
     } finally {
       setLoading(false); 
+    }
+  };
+
+  const handleGalleryClick = () => {
+    setActiveTab('gallery');
+    setMobileMenuOpen(false);
+    if (user) {
+      fetchGallery(user.uid); // ✅ Triggers spinner logic
     }
   };
 
@@ -193,6 +204,8 @@ function App() {
       setMode('product');
       setActiveTab('create');
       setError("");
+      
+      // ✅ Scroll to top for better mobile UX
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setError("Failed to load template.");
@@ -441,7 +454,7 @@ function App() {
           <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
             <span className="icon">✨</span> Create Design
           </button>
-          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => {setActiveTab('gallery'); setMobileMenuOpen(false);}}>
+          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={handleGalleryClick}>
             <span className="icon">🖼️</span> My Gallery
           </button>
           
@@ -525,7 +538,7 @@ function App() {
                         collectionsData.map((item, idx) => (
                            <div key={idx} className="gallery-card">
                               <div className="img-wrapper">
-                                 <img src={item.url} alt={item.name} loading="lazy" decoding="async" />
+                                 <img src={item.url} alt={item.name} loading="lazy" />
                                  <div className="overlay">
                                     <button className="btn-primary" onClick={() => handleUseTemplate(item.url, item.name)}>✨ Use</button>
                                     <button className="delete-btn-overlay" onClick={(e) => handleDeleteTemplate(e, item.id)} title="Delete">🗑️</button>
@@ -544,21 +557,25 @@ function App() {
             <div className="create-container">
               <div className="grid-layout">
                 <div className="col-left">
+                  
+                  {/* ✅ FIXED UPLOAD CARD LOGIC */}
                   <div className="card upload-card-lg">
                     <div className="card-header"><h3>Sketches <span className="req">*</span></h3></div>
-                    <div className="upload-zone">
+                    
+                    <div className={`upload-zone ${sketchFiles.length > 0 ? 'has-files' : ''}`}>
                       <input type="file" multiple onChange={handleSketchUpload} />
                       <label>
-                          <div className="upload-icon-lg">✏️</div>
-                          <span>Click to Upload Sketches</span>
+                          {sketchFiles.length === 0 && <div className="upload-icon-lg">✏️</div>}
+                          <span>{sketchFiles.length > 0 ? 'Add more sketches...' : 'Click to Upload Sketches'}</span>
                       </label>
                     </div>
+
                     {sketchFiles.length > 0 && (
-                        <div className="file-list-preview" style={{marginTop:'15px'}}>
+                        <div className="file-list-preview">
                             {sketchFiles.map((f, i) => (
                                 <div key={i} className="file-tag">
-                                    {f.name} 
-                                    <span onClick={(e) => { 
+                                    <span className="file-name-truncate">{f.name}</span> 
+                                    <span className="remove-btn" onClick={(e) => { 
                                         e.preventDefault(); 
                                         e.stopPropagation(); 
                                         removeSketch(i); 
@@ -568,6 +585,7 @@ function App() {
                         </div>
                     )}
                   </div>
+
                   <div className="card"><h3>Brand Logo</h3><div className="mini-upload"><input type="file" onChange={handleLogoUpload} /><label>{logoFile ? `✅ ${logoFile.name}` : 'Upload PNG'}</label></div></div>
                   
                   {/* ✅ OUTFIT: DROPDOWN FOR ALL DEVICES */}
@@ -611,35 +629,30 @@ function App() {
 
           {activeTab === 'gallery' && (
             <div className="gallery-container">
-                  {userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
-                  <>
-                    <div className="gallery-grid">
-                        {/* ✅ OPTIMIZATION #1: Renders only a subset of images */}
-                        {userGallery.slice(0, visibleGalleryCount).map((img, idx) => (
-                          <div key={idx} className="gallery-card">
-                            <div className="img-wrapper">
-                                {/* ✅ OPTIMIZATION #2: Async decoding */}
-                                <img src={img.imageUrl || img.url} alt={img.name} loading="lazy" decoding="async" />
-                                <div className="overlay">
-                                  <button className="icon-btn" onClick={() => handleGenerateVideo(img)} title="Create Video">🎬</button>
-                                  <a href={img.imageUrl || img.url} download className="icon-btn" title="Download">⬇️</a>
-                                  <button className="delete-btn-gallery" onClick={(e) => handleDeleteGalleryItem(e, img.id)} title="Delete">🗑️</button>
-                                </div>
-                            </div>
-                            <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
-                          </div>
-                        ))}
-                    </div>
-                    {/* ✅ LOAD MORE BUTTON */}
-                    {visibleGalleryCount < userGallery.length && (
-                      <div className="load-more-container">
-                        <button className="btn-load-more" onClick={() => setVisibleGalleryCount(prev => prev + 12)}>
-                           Load More ({userGallery.length - visibleGalleryCount} remaining)
-                        </button>
-                      </div>
-                    )}
-                  </>
-               }
+               {/* ADDED LOADING CHECK HERE */}
+               {loading ? (
+                  <div className="empty-state">
+                     <div className="spinner-ring" style={{margin:'0 auto 1rem auto'}}></div>
+                     <p>Loading your designs...</p>
+                  </div>
+               ) : (
+                  userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
+                  <div className="gallery-grid">
+                      {userGallery.map((img, idx) => (
+                        <div key={idx} className="gallery-card">
+                           <div className="img-wrapper">
+                              <img src={img.imageUrl || img.url} alt={img.name} loading="lazy" />
+                              <div className="overlay">
+                                 <button className="icon-btn" onClick={() => handleGenerateVideo(img)} title="Create Video">🎬</button>
+                                 <a href={img.imageUrl || img.url} download className="icon-btn" title="Download">⬇️</a>
+                                 <button className="delete-btn-gallery" onClick={(e) => handleDeleteGalleryItem(e, img.id)} title="Delete">🗑️</button>
+                              </div>
+                           </div>
+                           <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
+                        </div>
+                      ))}
+                  </div>
+               )}
             </div>
           )}
         </div>

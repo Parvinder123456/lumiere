@@ -199,15 +199,14 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
 .mobile-fab-container { display: none; }
 
 /* ===================================================================
-   MISSING ANIMATIONS & CONTAINERS (ADDED)
+   ANIMATIONS & CONTAINERS (SPINNERS, VIDEO)
    =================================================================== */
 
-/* SPINNER ANIMATION */
 .spinner-ring {
   width: 40px;
   height: 40px;
-  border: 4px solid rgba(226, 232, 240, 0.3); /* Light grey transparent */
-  border-left-color: var(--primary); /* Gold color */
+  border: 4px solid rgba(226, 232, 240, 0.3);
+  border-left-color: var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto;
@@ -222,7 +221,6 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   100% { transform: rotate(360deg); }
 }
 
-/* VIDEO SUCCESS CONTAINER */
 .video-success-container {
   width: 100%;
   background: black;
@@ -238,6 +236,40 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   max-height: 400px;
   width: 100%;
   object-fit: contain;
+}
+
+/* ===================================================================
+   FIX: COMPACT UPLOAD CARD & TRUNCATION
+   =================================================================== */
+
+/* 1. Truncate long filenames */
+.file-name-truncate {
+  display: inline-block;
+  max-width: 120px;       /* Forces long names to cut off */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Adds '...' at the end */
+  vertical-align: middle;
+}
+
+.remove-btn {
+  margin-left: 6px;
+  cursor: pointer;
+  color: #ef4444;
+  font-weight: bold;
+}
+
+/* 2. Shrink the upload zone when files are present */
+.upload-zone.has-files {
+  flex: 0 0 auto;         /* Stop it from taking all space */
+  min-height: 60px;       /* Much smaller height */
+  margin-bottom: 0.5rem;
+}
+
+.upload-zone.has-files label {
+  flex-direction: row;    /* Horizontal layout to save vertical space */
+  gap: 10px;
+  padding: 0.5rem;
 }
 
 
@@ -272,12 +304,30 @@ body { margin: 0; font-family: var(--font-body); background: var(--main-bg); col
   .grid-layout { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .card { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 10px; }
   .card h3 { font-size: 0.9rem; margin-bottom: 0.5rem; }
-  .upload-card-lg { min-height: 180px; }
+  
+  /* FIX FOR UPLOAD CARD SCROLLING ISSUE */
+  .upload-card-lg { min-height: auto; } /* Allow card to shrink freely */
+  
   .upload-zone label { padding: 0.5rem; }
   .upload-icon-lg { font-size: 1.5rem; margin-bottom: 0.25rem; }
   .upload-zone label span { font-size: 0.75rem; }
-  .file-list-preview { padding: 0.25rem; gap: 4px; }
-  .file-tag { font-size: 0.7rem; padding: 3px 6px; }
+  
+  /* File List Fixes for Mobile */
+  .file-list-preview {
+    padding: 0.5rem 0 0 0;
+    justify-content: flex-start;
+  }
+  .file-tag {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    background: #f1f5f9;
+    width: 100%; /* Full width on very small screens looks neater */
+    justify-content: space-between;
+  }
+  .file-name-truncate {
+    max-width: 200px; /* More space since it's full width now */
+  }
+
   .text-input { padding: 0.5rem; font-size: 0.8rem; min-height: 60px; }
   
   /* Select input mobile tweaks */
