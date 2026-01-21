@@ -4,703 +4,713 @@ import Auth from './Auth';
 import { auth } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
+// COMPONENTS
+import Sidebar from './components/Sidebar';
+import CreateStudio from './components/CreateStudio';
+import Gallery from './components/Gallery';
+import QuickPickReel from './components/QuickPickReel';
+import VideoModal from './components/VideoModal';
+
+// ===================================================================
+// 🔧 UTILITY: CLIENT-SIDE IMAGE COMPRESSION (EXTRA DEFENSIVE)
+// ===================================================================
+const compressAndConvertImage = (file, maxWidth = 800, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+        // Log what we received
+        console.log('🔍 Compressing:', {
+            name: file?.name,
+            type: file?.type,
+            size: file?.size,
+            isFile: file instanceof File
+        });
+        
+        // Enhanced validation
+        if (!file) {
+            reject(new Error('No file provided'));
+            return;
+        }
+        
+        if (!(file instanceof File)) {
+            reject(new Error('Invalid file object'));
+            return;
+        }
+        
+        if (!file.type) {
+            reject(new Error(`File ${file.name} has no type property`));
+            return;
+        }
+        
+        if (!file.type.startsWith('image/')) {
+            reject(new Error(`File ${file.name} is not an image (type: ${file.type})`));
+            return;
+        }
+
+        const reader = new FileReader();
+        
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        
+        reader.onload = (e) => {
+            const img = new Image();
+            
+            img.onerror = () => reject(new Error('Failed to load image'));
+            
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxWidth) {
+                        height = (height * maxWidth) / width;
+                        width = maxWidth;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                    
+                    const originalSize = (file.size / 1024).toFixed(0);
+                    const compressedSize = (compressedBase64.length * 0.75 / 1024).toFixed(0);
+                    const savings = ((1 - compressedSize / originalSize) * 100).toFixed(0);
+                    
+                    console.log(`📉 ${file.name}: ${originalSize}KB → ${compressedSize}KB (${savings}% smaller)`);
+                    resolve(compressedBase64);
+                } catch (error) {
+                    reject(new Error('Image processing failed: ' + error.message));
+                }
+            };
+            
+            img.src = e.target.result;
+        };
+        
+        reader.readAsDataURL(file);
+    });
+};
+
+// ===================================================================
+// 🔧 UTILITY: GET VALID FIREBASE TOKEN (WITH AUTO-REFRESH)
+// ===================================================================
+const getValidToken = async (currentUser) => {
+    try {
+        return await currentUser.getIdToken(true);
+    } catch (error) {
+        console.error("Token refresh failed:", error);
+        throw new Error("Session expired. Please login again.");
+    }
+};
+
+// ===================================================================
+// 🎨 CONSTANTS (Moved outside component for performance)
+// ===================================================================
+const METAL_OPTIONS = [
+    {value:'yellow-gold', label:'Yellow Gold', color:'#E6C200'},
+    {value:'rose-gold', label:'Rose Gold', color:'#F4C2C2'},
+    {value:'platinum', label:'Platinum', color:'#E5E4E2'},
+    {value:'silver', label:'Silver', color:'#C0C0C0'}
+];
+
+const GEM_OPTIONS = [
+    {value:'diamond', label:'Diamond', color:'#b9f2ff'},
+    {value:'ruby', label:'Ruby', color:'#9b111e'},
+    {value:'emerald', label:'Emerald', color:'#50c878'},
+    {value:'sapphire', label:'Sapphire', color:'#0f52ba'}
+];
+
+const FINISH_OPTIONS = [
+    {value:'polished', label:'High Polish', color:'#e2e8f0'},
+    {value:'matte', label:'Matte', color:'#94a3b8'},
+    {value:'hammered', label:'Hammered', color:'#475569'}
+];
+
+const OUTFIT_OPTIONS = [
+    {value:'none', label:'None'},
+    {value:'evening-gown', label:'Evening Gown'},
+    {value:'bridal', label:'Bridal'},
+    {value:'boho', label:'Bohemian'}
+];
+
 function App() {
-  // --- CONFIGURATION ---
-  const API_BASE_URL = 'https://lumiere-func-linux.azurewebsites.net/api'; 
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://lumiere-func-linux.azurewebsites.net/api';
   
-  // --- AUTH & USER STATE ---
+  // --- STATE ---
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [credits, setCredits] = useState(0); 
 
-  // --- NAVIGATION STATE ---
   const [activeTab, setActiveTab] = useState('create');
   const [activeCategory, setActiveCategory] = useState('rings');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // --- DATA STATE ---
   const [collectionsData, setCollectionsData] = useState([]);
   const [userGallery, setUserGallery] = useState([]);
   
-  // --- CREATE STATE ---
   const [sketchFiles, setSketchFiles] = useState([]);
   const [personFile, setPersonFile] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [error, setError] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
-  const [mode, setMode] = useState('product');
+  const [customPrompt, setCustomPrompt] = useState('');
   
-  // --- ADMIN UPLOAD STATE ---
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [newTemplateFile, setNewTemplateFile] = useState(null);
-  const [newTemplateName, setNewTemplateName] = useState("");
-
-  // --- DESIGN OPTIONS ---
+  const [mode, setMode] = useState('product');
   const [metalType, setMetalType] = useState('yellow-gold');
   const [gemstone, setGemstone] = useState('diamond');
   const [finish, setFinish] = useState('polished');
-  
-  // ✅ OUTFIT STATE
-  const [outfit, setOutfit] = useState('none'); 
-  
-  const [customPrompt, setCustomPrompt] = useState('');
+  const [outfit, setOutfit] = useState('none');
 
-  // --- VIDEO GENERATION STATE ---
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [videoStatus, setVideoStatus] = useState('idle');
-  const [videoJobId, setVideoJobId] = useState(null);
   const [videoResult, setVideoResult] = useState(null);
   const [videoLogs, setVideoLogs] = useState([]);
-  const [videoPrompt, setVideoPrompt] = useState(''); 
-  const [currentVideoImage, setCurrentVideoImage] = useState(null); 
-  
+  const [videoPrompt, setVideoPrompt] = useState('');
+  const [currentVideoImage, setCurrentVideoImage] = useState(null);
   const pollIntervalRef = useRef(null);
 
-  // --- UI OPTIONS ARRAYS ---
-  
-  const metalOptions = [
-    { value: 'none', label: 'Original/None', emoji: '🚫', color: '#fff' },
-    { value: 'yellow-gold', label: 'Yellow Gold', emoji: '🟡', color: '#E6C200' },
-    { value: 'rose-gold', label: 'Rose Gold', emoji: '🟠', color: '#F4C2C2' },
-    { value: 'platinum', label: 'Platinum', emoji: '⚪', color: '#E5E4E2' },
-    { value: 'silver', label: 'Sterling Silver', emoji: '⚫', color: '#C0C0C0' },
-    { value: 'two-tone', label: 'Two-Tone', emoji: '🟡⚪', color: 'linear-gradient(45deg, #E6C200 50%, #E8E8E8 50%)' }
-  ];
-
-  const gemOptions = [
-    { value: 'diamond', label: 'Diamond', emoji: '💎', color: '#b9f2ff' },
-    { value: 'ruby', label: 'Ruby', emoji: '🔴', color: '#9b111e' },
-    { value: 'emerald', label: 'Emerald', emoji: '🟢', color: '#50c878' },
-    { value: 'sapphire', label: 'Sapphire', emoji: '🔵', color: '#0f52ba' },
-    { value: 'pearl', label: 'Pearl', emoji: '⚪', color: '#f0ead6' },
-    { value: 'none', label: 'No Gemstone', emoji: '✨', color: '#eee' }
-  ];
-
-  const finishOptions = [
-    { value: 'polished', label: 'High Polish', color: '#e2e8f0' },
-    { value: 'matte', label: 'Matte/Brushed', color: '#94a3b8' },
-    { value: 'hammered', label: 'Hammered', color: '#475569' },
-    { value: 'engraved', label: 'Engraved', color: '#f59e0b' }
-  ];
-
-  const outfitOptions = [
-    { value: 'none', label: 'None' },
-    { value: 'evening-gown', label: 'Evening Gown' },
-    { value: 'professional-suit', label: 'Power Suit' },
-    { value: 'casual-chic', label: 'Casual Chic' },
-    { value: 'bridal', label: 'Bridal Dress' },
-    { value: 'boho', label: 'Bohemian' }
-  ];
-
-  // --- 1. INITIALIZATION & AUTH ---
+  // --- INIT + CLEANUP ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthLoading(false);
       if (currentUser) {
-        fetchGallery(currentUser.uid);
+          fetchGallery(currentUser);
+          fetchUserProfile(currentUser);
+          
+          fetch(`${API_BASE_URL}/collections?category=rings`).then(r=>r.json()).catch(console.error);
+          fetch(`${API_BASE_URL}/collections?category=necklaces`).then(r=>r.json()).catch(console.error);
       }
     });
-    return () => unsubscribe();
+    
+    return () => {
+        unsubscribe();
+        if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+        }
+    };
   }, []);
 
-  // --- 2. API CALLS ---
-  const fetchGallery = async (uid) => {
-    setLoading(true); 
+  // --- API HELPERS ---
+  const fetchUserProfile = async (currentUser) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/gallery?userId=${uid}`);
-      if (res.ok) {
-        const data = await res.json();
-        setUserGallery(data);
-      }
-    } catch (err) {
-      console.warn("Gallery fetch failed");
-    } finally {
-      setLoading(false); 
+        const token = await getValidToken(currentUser);
+        const res = await fetch(`${API_BASE_URL}/getUserProfile`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setCredits(data.credits);
+        }
+    } catch (e) { 
+        console.error("Credit fetch failed:", e); 
+    }
+  };
+
+  const fetchGallery = async (currentUser) => {
+    if(!currentUser) return;
+    setLoading(true);
+    try {
+      const token = await getValidToken(currentUser);
+      const res = await fetch(`${API_BASE_URL}/gallery?userId=${currentUser.uid}`, {
+         headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if(res.ok) setUserGallery(await res.json());
+    } catch(e) { 
+        console.error(e); 
+    } finally { 
+        setLoading(false); 
     }
   };
 
   const loadCollection = async (category) => {
     setActiveCategory(category);
     setActiveTab('collections');
-    setMobileMenuOpen(false);
-    setLoading(true); 
+    setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/collections?category=${category}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCollectionsData(data);
-      } else {
-        throw new Error();
-      }
-    } catch (err) {
-      setCollectionsData([]); 
-    } finally {
-      setLoading(false); 
+      if(res.ok) setCollectionsData(await res.json());
+    } catch(e) { 
+        setCollectionsData([]); 
+    } finally { 
+        setLoading(false); 
     }
   };
 
-  const handleGalleryClick = () => {
-    setActiveTab('gallery');
-    setMobileMenuOpen(false);
+  // ===================================================================
+  // 🟢 COLLECTION UPLOAD (Single + Multiple File Support)
+  // ===================================================================
+  const handleCollectionUpload = async (files, setUploadProgress) => {
+    console.log('🔍 Received files:', files);
     
-    // ✅ FIXED: Only load if we don't have data, to prevent infinite spinner
-    if (user && userGallery.length === 0) {
-       fetchGallery(user.uid);
+    if (!files || files.length === 0) {
+        console.warn('No files provided');
+        return;
     }
-  };
-
-  const handleDeleteTemplate = async (e, id) => {
-    e.stopPropagation();
-    if(!confirm("Delete this template?")) return;
-    const originalData = [...collectionsData];
-    setCollectionsData(prev => prev.filter(item => item.id !== id));
-    try {
-      const res = await fetch(`${API_BASE_URL}/collections?id=${id}&category=${activeCategory}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error("Delete failed");
-    } catch (err) {
-      alert("Error deleting: " + err.message);
-      setCollectionsData(originalData);
+    
+    // Convert to array if not already
+    const fileArray = Array.isArray(files) ? [...files] : [files]; 
+    
+    console.log(`🔍 Processing ${fileArray.length} files`);
+    
+    // Validate EACH file individually
+    const validFiles = [];
+    for (let i = 0; i < fileArray.length; i++) {
+        const f = fileArray[i];
+        if (f && f instanceof File && f.type && f.type.startsWith('image/')) {
+            validFiles.push(f);
+        } else {
+            console.warn(` ❌ Invalid file at index ${i}:`, f);
+        }
     }
-  };
-
-  const handleUploadTemplate = async () => {
-    if (!newTemplateFile || !newTemplateName) return alert("Select file and name!");
-    setStatusMessage("Uploading...");
-    try {
-      const base64 = await fileToBase64(newTemplateFile);
-      const payload = {
-        name: newTemplateName,
-        category: activeCategory, 
-        url: base64, 
-        createdAt: new Date().toISOString()
-      };
-      const res = await fetch(`${API_BASE_URL}/collections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      await loadCollection(activeCategory);
-      setShowUploadModal(false);
-      setNewTemplateFile(null);
-      setNewTemplateName("");
-      setStatusMessage("");
-      alert("✅ Uploaded!");
-    } catch (err) {
-      alert(err.message);
-      setStatusMessage("");
+    
+    if (validFiles.length === 0) {
+        alert('No valid image files found');
+        return;
     }
-  };
-
-  const handleUseTemplate = async (templateUrl, templateName) => {
+    
     setLoading(true);
-    setStatusMessage("Loading template...");
+    setProgress({ current: 0, total: validFiles.length });
+
+    const results = { succeeded: 0, failed: 0, errors: [] };
+
     try {
-      const response = await fetch(templateUrl);
-      const blob = await response.blob();
-      const file = new File([blob], `${templateName}.png`, { type: blob.type });
-      setSketchFiles([file]);
-      setMode('product');
-      setActiveTab('create');
-      setError("");
-      
-      // ✅ Scroll to top for better mobile UX
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      setError("Failed to load template.");
+        const token = await getValidToken(user);
+        
+        // Process files sequentially
+        for (let i = 0; i < validFiles.length; i++) {
+            const file = validFiles[i];
+            
+            try {
+                const compressedBase64 = await compressAndConvertImage(file, 800);
+                const fileName = file.name.replace(/\.[^/.]+$/, "");
+
+                const res = await fetch(`${API_BASE_URL}/collections`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        image: compressedBase64,
+                        category: activeCategory, 
+                        name: fileName
+                    })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || 'Upload failed');
+                }
+                
+                results.succeeded++;
+                
+            } catch (fileError) {
+                console.error(`❌ [${i + 1}/${validFiles.length}] Failed:`, fileError);
+                results.failed++;
+                results.errors.push(`${file.name}: ${fileError.message}`);
+            }
+            
+            // Update progress after each file
+            setProgress({ current: i + 1, total: validFiles.length });
+            if (setUploadProgress) {
+                setUploadProgress({ current: i + 1, total: validFiles.length });
+            }
+        }
+        
+        // Reload collection
+        await loadCollection(activeCategory);
+        
+        if (results.failed > 0) {
+            alert(`Upload complete!\n✅ ${results.succeeded} succeeded\n❌ ${results.failed} failed\n\nErrors:\n${results.errors.join('\n')}`);
+        }
+        
+    } catch (e) {
+        console.error("💥 Fatal upload error:", e);
+        alert("Error uploading: " + e.message);
     } finally {
-      setLoading(false);
-      setStatusMessage("");
+        setLoading(false);
+        setProgress({ current: 0, total: 0 });
     }
   };
 
-  // --- 3. GENERATION LOGIC ---
+  // ===================================================================
+  // 🎨 GENERATION HANDLER
+  // ===================================================================
   const handleGenerateAll = async () => {
-    if (sketchFiles.length === 0) return alert("Please upload a sketch!");
-    
+    if (sketchFiles.length === 0) return alert("Upload a sketch first.");
+    if (credits < sketchFiles.length) return alert(`Not enough credits! You need ${sketchFiles.length}, but have ${credits}.`);
+
     setLoading(true); 
     setError(""); 
     setProgress({ current: 0, total: sketchFiles.length });
-    
-    const instructions = buildInstructions();
-    const personB64 = await fileToBase64(personFile);
-    const logoB64 = await fileToBase64(logoFile);
 
+    const instructions = `Jewelry: ${metalType}, ${gemstone}, ${finish}. ${mode === 'product' ? 'Studio shot' : 'Lifestyle shot ' + outfit}. ${customPrompt}`;
+    
     try {
-      for (let i = 0; i < sketchFiles.length; i++) {
-        try {
-          setStatusMessage(`Processing...`); 
-          const sketchB64 = await fileToBase64(sketchFiles[i]);
-          
-          const response = await fetch(`${API_BASE_URL}/generate_jewelry?userId=${user.uid}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sketch_image: sketchB64,
-              person_image: personB64,
-              logo_image: logoB64,
-              instructions: instructions,
-              mode: mode
-            })
-          });
+        const token = await getValidToken(user);
+        
+        const personB64 = personFile ? await compressAndConvertImage(personFile, 1024) : null;
+        const logoB64 = logoFile ? await compressAndConvertImage(logoFile, 500) : null;
 
-          if (!response.ok) throw new Error("Generation failed");
-          const jsonData = await response.json();
-          if (jsonData.saved) console.log(`✅ Image ${i+1} saved to DB.`);
+        for (let i = 0; i < sketchFiles.length; i++) {
+            const sketchB64 = await compressAndConvertImage(sketchFiles[i], 1024);
+            
+            const response = await fetch(`${API_BASE_URL}/generate_jewelry`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${token}`,
+                    'X-Request-ID': crypto.randomUUID()
+                },
+                body: JSON.stringify({ 
+                    sketch_image: sketchB64, 
+                    person_image: personB64, 
+                    logo_image: logoB64, 
+                    instructions, 
+                    mode 
+                })
+            });
 
-        } catch (err) {
-          console.error(err);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Generation failed for ${sketchFiles[i].name}`);
+            }
+            
+            const successData = await response.json();
+            
+            if(successData.remaining_credits !== undefined) {
+                setCredits(successData.remaining_credits);
+            }
+
+            setProgress(prev => ({ ...prev, current: i + 1 }));
         }
-        setProgress(prev => ({ ...prev, current: i + 1 }));
-      }
-      
-      await fetchGallery(user.uid);
-      if (sketchFiles.length > 0) setActiveTab('gallery');
-
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false); 
-      setStatusMessage(""); 
-      setProgress({ current: 0, total: 0 }); 
+        
+        await fetchGallery(user);
+        setActiveTab('gallery');
+        
+    } catch (err) { 
+        console.error("Generation error:", err);
+        setError(err.message);
+        alert(err.message); 
+        await fetchUserProfile(user); 
+    } finally { 
+        setLoading(false); 
+        setProgress({ current: 0, total: 0 }); 
     }
   };
 
-  // --- HELPERS ---
-  const fileToBase64 = (file) => {
-    return new Promise((resolve) => {
-      if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const scale = Math.min(1024 / img.width, 1024 / img.height, 1);
-          canvas.width = img.width * scale;
-          canvas.height = img.height * scale;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8)); 
-        };
-      };
-    });
-  };
-
-  const compressImageForVideo = (base64Str) => {
-    return new Promise((resolve) => {
-      if(base64Str.startsWith('data:')) return resolve(base64Str);
-      
-      const img = new Image();
-      img.src = base64Str;
-      img.crossOrigin = "anonymous"; 
-      img.onload = () => {
-        try {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width; canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
-        } catch (e) {
-            console.warn("CORS/Canvas error, sending original URL", e);
-            resolve(base64Str);
-        }
-      };
-      img.onerror = () => resolve(base64Str); 
-    });
-  };
-
-  const buildInstructions = () => {
-    let base = "Professional luxury jewelry photography";
-    if (metalType !== 'none') {
-        const metalLabel = metalOptions.find(m => m.value === metalType)?.label || metalType;
-        base += `: ${metalLabel} metal with ${finish} finish`;
-    } else {
-        base += `: keep original material or high quality finish`;
-    }
-
-    if (gemstone !== 'none') {
-        const gem = gemOptions.find(g => g.value === gemstone)?.label || gemstone;
-        base += `, featuring ${gem} gemstones`;
-    }
-    
-    if (mode === 'product') {
-        base += `. Studio lighting, white background.`;
-    } else {
-        base += `. Natural lifestyle setting.`;
-        if (outfit !== 'none') {
-             const outfitLabel = outfitOptions.find(o => o.value === outfit)?.label || outfit;
-             base += ` Model wearing ${outfitLabel}.`;
-        }
-    }
-
-    if (customPrompt) base += ` ${customPrompt}`;
-    return base;
-  };
-
-  // --- HANDLERS ---
-  const handleSketchUpload = (e) => setSketchFiles(prev => [...prev, ...Array.from(e.target.files)]);
-  
-  const removeSketch = (idx) => {
-    setSketchFiles(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const handlePersonUpload = (e) => setPersonFile(e.target.files[0]);
-  const handleLogoUpload = (e) => setLogoFile(e.target.files[0]);
-  const handleLogout = () => signOut(auth);
-
+  // ===================================================================
+  // 🗑️ DELETE HANDLERS
+  // ===================================================================
   const handleDeleteGalleryItem = async (e, id) => {
-    e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this design?")) return;
-    const previousGallery = [...userGallery];
-    setUserGallery(prev => prev.filter(item => item.id !== id));
+    e.stopPropagation(); 
+    if(!confirm("Delete this image?")) return;
+    
+    setUserGallery(prev => prev.filter(x => x.id !== id));
+    
     try {
-      const res = await fetch(`${API_BASE_URL}/gallery?id=${id}&userId=${user.uid}`, { 
-        method: 'DELETE' 
+      const token = await getValidToken(user);
+      await fetch(`${API_BASE_URL}/gallery?id=${id}`, { 
+          method: 'DELETE', 
+          headers: { 'Authorization': `Bearer ${token}` } 
       });
-      if (!res.ok) throw new Error("Delete failed");
-    } catch (err) {
-      alert("Could not delete item");
-      setUserGallery(previousGallery);
+    } catch(e) { 
+        alert("Delete failed"); 
+        fetchGallery(user);
     }
   };
 
-  // --- VIDEO HANDLERS ---
-  const handleGenerateVideo = (imageResult) => {
-    setCurrentVideoImage(imageResult);
-    setVideoModalOpen(true);
-    setVideoStatus('prompt');
-    setVideoLogs([]);
-
-    const name = imageResult.name ? imageResult.name.toLowerCase() : "";
-    let itemType = "jewelry piece";
-    if (name.includes("ring")) itemType = "diamond ring";
-    else if (name.includes("necklace")) itemType = "gold necklace";
-    else if (name.includes("earring")) itemType = "earrings";
+  const handleDeleteCollectionItem = async (e, id) => {
+    e.stopPropagation(); 
+    if(!confirm("Delete from Collection?")) return;
     
-    setVideoPrompt(`Cinematic slow motion 360-degree rotation of a ${itemType}, studio lighting, 4k, white background`);
+    setCollectionsData(prev => prev.filter(x => x.id !== id)); 
+    
+    try {
+      const token = await getValidToken(user);
+      await fetch(`${API_BASE_URL}/collections?id=${id}&category=${activeCategory}`, { 
+          method: 'DELETE', 
+          headers: { 'Authorization': `Bearer ${token}` } 
+      });
+    } catch(e) { 
+        alert("Delete failed"); 
+        loadCollection(activeCategory);
+    }
+  };
+
+  // ===================================================================
+  // 🎬 VIDEO HANDLERS
+  // ===================================================================
+  const handleGenerateVideo = (img) => { 
+      setCurrentVideoImage(img); 
+      setVideoModalOpen(true); 
+      setVideoStatus('prompt'); 
+      setVideoLogs([]); 
+      setVideoPrompt(`Cinematic 360 rotation of ${img.name}, studio lighting, 4k`); 
   };
 
   const startVideoGeneration = async () => {
     if (!videoPrompt.trim()) return alert("Please enter a prompt!");
-    setVideoStatus('queued'); 
+    if (credits < 3) return alert(`Not enough credits! Video costs 3 credits.`);
+    
+    setVideoStatus('queued');
+    
     try {
-      const imageResult = currentVideoImage;
-      let imageSource = imageResult.imageUrl || imageResult.url;
-      let payloadImage = imageSource;
-
-      setVideoLogs(p => [{time: new Date().toLocaleTimeString(), message: 'Preparing image...', type:'info'}, ...p]);
-
-      if (!imageSource.startsWith('http')) {
-         payloadImage = await compressImageForVideo(imageSource);
-      }
-      
-      const submitRes = await fetch(`${API_BASE_URL}/submit_video`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            image: payloadImage,
-            prompt: videoPrompt
-        }) 
-      });
-
-      if(!submitRes.ok) throw new Error("Submit failed");
-      const { job_id } = await submitRes.json();
-      setVideoJobId(job_id);
-      
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/status/${job_id}`);
-          if(!res.ok) return;
-          const data = await res.json();
-          if(data.status === 'processing') setVideoStatus('processing');
-          if(data.status === 'completed') {
-            clearInterval(pollIntervalRef.current); setVideoStatus('completed'); setVideoResult(data.video_url);
-          }
-          if(data.status === 'failed') {
-            clearInterval(pollIntervalRef.current); setVideoStatus('failed');
-          }
-        } catch(e) { console.error(e); }
-      }, 5000);
-    } catch(err) {
-      setVideoStatus('failed');
+        let image = currentVideoImage.imageUrl || currentVideoImage.url;
+        const token = await getValidToken(user);
+        
+        const res = await fetch(`${API_BASE_URL}/submit_video`, {
+            method: 'POST', 
+            headers: {
+                'Content-Type':'application/json', 
+                'Authorization': `Bearer ${token}`,
+                'X-Request-ID': crypto.randomUUID()
+            },
+            body: JSON.stringify({ image, prompt: videoPrompt })
+        });
+        
+        if(!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Video submission failed");
+        }
+        
+        const data = await res.json();
+        
+        if (data.remaining_credits !== undefined) {
+            setCredits(data.remaining_credits);
+        }
+        
+        const { job_id } = data;
+        
+        pollIntervalRef.current = setInterval(async () => {
+            try {
+                const sRes = await fetch(`${API_BASE_URL}/status/${job_id}`);
+                if(sRes.ok) {
+                    const statusData = await sRes.json();
+                    
+                    if(statusData.status === 'processing') {
+                        setVideoStatus('processing');
+                    }
+                    
+                    if(statusData.status === 'completed') { 
+                        clearInterval(pollIntervalRef.current);
+                        pollIntervalRef.current = null;
+                        setVideoStatus('completed'); 
+                        setVideoResult(statusData.video_url); 
+                    }
+                    
+                    if(statusData.status === 'failed') { 
+                        clearInterval(pollIntervalRef.current);
+                        pollIntervalRef.current = null;
+                        setVideoStatus('failed'); 
+                        alert('Video generation failed. Credits have been refunded.');
+                        await fetchUserProfile(user); 
+                    }
+                }
+            } catch(e) {
+                console.error('Polling error:', e);
+            }
+        }, 5000);
+        
+    } catch(e) { 
+        setVideoStatus('failed'); 
+        alert(e.message); 
+        await fetchUserProfile(user); 
     }
   };
 
-  const closeVideoModal = () => { 
-      clearInterval(pollIntervalRef.current); 
-      setVideoModalOpen(false); 
-      setCurrentVideoImage(null);
-  };
+// ===================================================================
+// 🎨 TEMPLATE HANDLERS (Simple Proxy Version)
+// ===================================================================
+const handleUseTemplate = async (url, name) => {
+  setLoading(true);
+  setError("");
+  
+  try {
+    // Build proxy URL
+    const proxyUrl = `${API_BASE_URL}/proxyimage?url=${encodeURIComponent(url)}`;
+    
+    console.log('📥 Fetching via proxy:', proxyUrl);
 
-  if (authLoading) return <div className="dashboard-layout" style={{justifyContent:'center', alignItems:'center'}}>Loading...</div>;
+    const response = await fetch(proxyUrl, {
+        method: 'GET'
+    });
+
+    console.log('📡 Response status:', response.status);
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`Proxy returned ${response.status}: ${errorText}`);
+    }
+
+    const blob = await response.blob();
+    
+    console.log('✅ Blob received:', blob.size, 'bytes, type:', blob.type);
+    
+    const file = new File([blob], `${name}.png`, { type: blob.type || 'image/png' });
+    
+    setSketchFiles([file]);
+    setMode('product');
+    setActiveTab('create');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    console.log('✅ Template loaded successfully');
+
+  } catch (err) { 
+    console.error('❌ Template load failed:', err);
+    setError(`Failed to load template: ${err.message}`);
+    
+    // Show user-friendly error
+    alert(`Could not load template:\n${err.message}\n\nMake sure your backend is running on ${API_BASE_URL}`);
+  } finally { 
+    setLoading(false); 
+  }
+};
+
+
+
+  const handleReelSelect = (url, name) => handleUseTemplate(url, name);
+  const handleLogout = () => signOut(auth);
+
+  // --- RENDER ---
+  if (authLoading) {
+      return (
+          <div className="dashboard-layout" style={{justifyContent:'center', alignItems:'center'}}>
+              <div className="spinner-ring"></div>
+              <p>Loading...</p>
+          </div>
+      );
+  }
+  
   if (!user) return <Auth />;
 
   return (
     <div className="dashboard-layout">
-      {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
-
-      <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <div className="logo-icon">💎</div>
-          <div className="logo-text">Lumière <span className="gold-text">Atelier</span></div>
-          <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)}>✕</button>
-        </div>
-
-        <nav className="sidebar-nav">
-          <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
-            <span className="icon">✨</span> Create Design
-          </button>
-          <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={handleGalleryClick}>
-            <span className="icon">🖼️</span> My Gallery
-          </button>
-          
-          <div className="nav-divider"></div>
-          <div className="nav-label">Collections</div>
-          <button className={`nav-item-sub ${activeCategory === 'rings' && activeTab === 'collections' ? 'active' : ''}`} 
-                  onClick={() => loadCollection('rings')}>Engagement Rings</button>
-          <button className={`nav-item-sub ${activeCategory === 'necklaces' && activeTab === 'collections' ? 'active' : ''}`} 
-                  onClick={() => loadCollection('necklaces')}>Necklaces</button>
-        </nav>
-
-        <div className="user-profile" onClick={() => setShowProfileMenu(!showProfileMenu)}>
-          {showProfileMenu && (
-            <div className="profile-menu">
-              <button>⚙️ Settings</button>
-              <button className="danger" onClick={handleLogout}>🚪 Logout</button>
-            </div>
-          )}
-          <div className="avatar">{user.email ? user.email[0].toUpperCase() : 'U'}</div>
-          <div className="user-info">
-            <span className="name">{user.email ? user.email.split('@')[0] : 'User'}</span>
-            <span className="plan">Customer</span>
-          </div>
-        </div>
-      </aside>
-
+      <Sidebar 
+          user={user} 
+          credits={credits} 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          activeCategory={activeCategory} 
+          loadCollection={loadCollection} 
+          handleLogout={handleLogout} 
+          mobileMenuOpen={mobileMenuOpen} 
+          setMobileMenuOpen={setMobileMenuOpen} 
+      />
+      
       <main className="main-content">
         <header className="top-header">
           <button className="hamburger-btn" onClick={() => setMobileMenuOpen(true)}>☰</button>
           <h2 className="page-title">
-             {activeTab === 'create' && 'Design Studio'}
-             {activeTab === 'gallery' && 'Your Gallery'}
-             {activeTab === 'collections' && (activeCategory === 'rings' ? 'Ring Templates' : 'Necklace Templates')}
+              {activeTab === 'create' ? 'Design Studio' : activeTab === 'gallery' ? 'My Gallery' : `${activeCategory} Collection`}
           </h2>
           {activeTab === 'create' && (
-             <button className="btn-primary desktop-gen-btn" onClick={handleGenerateAll} disabled={loading || sketchFiles.length === 0}>
-               {loading ? `Working...` : '🚀 Generate'}
-             </button>
-          )}
-          {activeTab === 'collections' && (
-             <button className="btn-upload-sm" onClick={() => setShowUploadModal(true)}>📤 Add</button>
+              <button 
+                  className="btn-primary desktop-gen-btn" 
+                  onClick={handleGenerateAll} 
+                  disabled={loading || sketchFiles.length === 0}
+              >
+                  {loading ? `Working...` : '🚀 Generate'}
+              </button>
           )}
         </header>
-
+        
         <div className="content-scroll-area">
           {error && <div className="error-banner">{error}</div>}
           
           {loading && progress.total > 0 && (
-            <div className="progress-container">
-              <div className="progress-bar">
-                 <div className="progress-fill" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
+              <div className="progress-container">
+                  <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${(progress.current / progress.total) * 100}%` }}></div>
+                  </div>
+                  <p className="progress-text">
+                      Processing {progress.current} of {progress.total}...
+                  </p>
               </div>
-              <p className="progress-text">
-                 {Math.round((progress.current / progress.total) * 100)}% Completed 
-                 ({progress.current}/{progress.total} images)
-              </p>
-            </div>
           )}
 
           {activeTab === 'collections' && (
-             <div className="create-container">
-                {showUploadModal && (
-                  <div className="card" style={{border:'2px solid var(--primary)', background:'#fffbeb'}}>
-                    <div className="card-header"><h3>Add to {activeCategory}</h3><button onClick={() => setShowUploadModal(false)} style={{border:'none',background:'transparent',cursor:'pointer'}}>✕</button></div>
-                    <div style={{display:'flex', gap:'1rem'}}>
-                      <input type="text" placeholder="Name" className="select-input" value={newTemplateName} onChange={e=>setNewTemplateName(e.target.value)} />
-                      <input type="file" onChange={e=>setNewTemplateFile(e.target.files[0])} />
-                      <button className="btn-primary" onClick={handleUploadTemplate}>Upload</button>
-                    </div>
-                  </div>
-                )}
-                
-                {loading ? (
-                   <div className="empty-state">
-                      <div className="spinner-ring" style={{margin:'0 auto 1rem auto'}}></div>
-                      <p>Loading templates...</p>
-                   </div>
-                ) : (
-                   <div className="gallery-grid">
-                      {collectionsData.length === 0 ? <div className="empty-state"><p>No templates found.</p></div> : 
-                        collectionsData.map((item, idx) => (
-                           <div key={idx} className="gallery-card">
-                              <div className="img-wrapper">
-                                 <img src={item.url} alt={item.name} loading="lazy" />
-                                 <div className="overlay">
-                                    <button className="btn-primary" onClick={() => handleUseTemplate(item.url, item.name)}>✨ Use</button>
-                                    <button className="delete-btn-overlay" onClick={(e) => handleDeleteTemplate(e, item.id)} title="Delete">🗑️</button>
-                                 </div>
-                              </div>
-                              <div className="card-info"><h4>{item.name}</h4></div>
-                           </div>
-                        ))
-                      }
-                   </div>
-                )}
-             </div>
+             <Gallery 
+                items={collectionsData} 
+                loading={loading} 
+                type="collection" 
+                handleUseTemplate={handleUseTemplate} 
+                handleDelete={handleDeleteCollectionItem} 
+                handleUpload={handleCollectionUpload}
+             />
           )}
 
           {activeTab === 'create' && (
-            <div className="create-container">
-              <div className="grid-layout">
-                <div className="col-left">
-                  
-                  {/* ✅ FIXED UPLOAD CARD LOGIC */}
-                  <div className="card upload-card-lg">
-                    <div className="card-header"><h3>Sketches <span className="req">*</span></h3></div>
-                    
-                    <div className={`upload-zone ${sketchFiles.length > 0 ? 'has-files' : ''}`}>
-                      <input type="file" multiple onChange={handleSketchUpload} />
-                      <label>
-                          {sketchFiles.length === 0 && <div className="upload-icon-lg">✏️</div>}
-                          <span>{sketchFiles.length > 0 ? 'Add more sketches...' : 'Click to Upload Sketches'}</span>
-                      </label>
-                    </div>
-
-                    {sketchFiles.length > 0 && (
-                        <div className="file-list-preview" style={{marginTop:'15px'}}>
-                            {sketchFiles.map((f, i) => (
-                                <div key={i} className="file-tag">
-                                    {/* ✅ APPLIED TRUNCATED CLASS HERE */}
-                                    <span className="truncated-text">{f.name}</span> 
-                                    
-                                    <span onClick={(e) => { 
-                                        e.preventDefault(); 
-                                        e.stopPropagation(); 
-                                        removeSketch(i); 
-                                    }} style={{cursor:'pointer', color:'#ef4444', marginLeft:'8px', fontWeight:'bold'}}>✕</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                  </div>
-
-                  <div className="card"><h3>Brand Logo</h3><div className="mini-upload"><input type="file" onChange={handleLogoUpload} /><label>{logoFile ? `✅ ${logoFile.name}` : 'Upload PNG'}</label></div></div>
-                  
-                  {/* ✅ OUTFIT: DROPDOWN FOR ALL DEVICES */}
-                  <div className="card">
-                    <h3>Matching Outfit</h3>
-                    <select className="select-input" value={outfit} onChange={(e) => setOutfit(e.target.value)}>
-                        {outfitOptions.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                    </select>
-                  </div>
-
-                  <div className="card"><h3>Custom Prompt</h3><textarea className="text-input" value={customPrompt} onChange={e => setCustomPrompt(e.target.value)} placeholder="Details..." /></div>
-                </div>
-                
-                <div className="col-right">
-                  <div className="card">
-                    <h3>Mode</h3>
-                    <div className="pill-group">
-                       <button className={`pill ${mode==='product'?'active':''}`} onClick={()=>setMode('product')}>📸 Product</button>
-                       <button className={`pill ${mode==='try_on'?'active':''}`} onClick={()=>setMode('try_on')}>👤 Try-On</button>
-                    </div>
-                    {mode === 'try_on' && <div className="mini-upload"><input type="file" onChange={handlePersonUpload} /><label>{personFile ? `✅ ${personFile.name}` : 'Upload Model Photo'}</label></div>}
-                  </div>
-                  <div className="card"><h3>Metal</h3><div className="grid-select">{metalOptions.map(opt => (<button key={opt.value} className={`grid-btn ${metalType===opt.value?'selected':''}`} onClick={()=>setMetalType(opt.value)}><span className="dot" style={{background:opt.color, border: opt.value==='none'?'1px dashed #ccc':'none'}}></span><span className="btn-label">{opt.label}</span></button>))}</div></div>
-                  <div className="card"><h3>Gemstone</h3><div className="grid-select">{gemOptions.map(opt => (<button key={opt.value} className={`grid-btn ${gemstone===opt.value?'selected':''}`} onClick={()=>setGemstone(opt.value)}><span className="dot" style={{background:opt.color}}></span><span className="btn-label">{opt.label}</span></button>))}</div></div>
-                  <div className="card">
-                    <h3>Finish</h3>
-                    <div className="grid-select">
-                      {finishOptions.map(opt => (
-                        <button key={opt.value} className={`grid-btn ${finish === opt.value ? 'selected' : ''}`} onClick={() => setFinish(opt.value)}>
-                          <span className="dot" style={{background: opt.color}}></span><span className="btn-label">{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <CreateStudio 
+                sketchFiles={sketchFiles} 
+                setSketchFiles={setSketchFiles} 
+                personFile={personFile} 
+                setPersonFile={setPersonFile} 
+                logoFile={logoFile} 
+                setLogoFile={setLogoFile} 
+                customPrompt={customPrompt} 
+                setCustomPrompt={setCustomPrompt} 
+                mode={mode} 
+                setMode={setMode} 
+                metalType={metalType} 
+                setMetalType={setMetalType} 
+                gemstone={gemstone} 
+                setGemstone={setGemstone} 
+                finish={finish} 
+                setFinish={setFinish} 
+                outfit={outfit} 
+                setOutfit={setOutfit} 
+                loading={loading} 
+                handleGenerateAll={handleGenerateAll} 
+                metalOptions={METAL_OPTIONS} 
+                gemOptions={GEM_OPTIONS} 
+                finishOptions={FINISH_OPTIONS} 
+                outfitOptions={OUTFIT_OPTIONS} 
+            />
           )}
 
           {activeTab === 'gallery' && (
-            <div className="gallery-container">
-               {/* ADDED LOADING CHECK HERE */}
-               {loading ? (
-                  <div className="empty-state">
-                     <div className="spinner-ring" style={{margin:'0 auto 1rem auto'}}></div>
-                     <p>Loading your designs...</p>
-                  </div>
-               ) : (
-                  userGallery.length === 0 ? <div className="empty-state"><h3>Gallery Empty</h3></div> : 
-                  <div className="gallery-grid">
-                      {userGallery.map((img, idx) => (
-                        <div key={idx} className="gallery-card">
-                           <div className="img-wrapper">
-                              <img src={img.imageUrl || img.url} alt={img.name} loading="lazy" />
-                              <div className="overlay">
-                                 <button className="icon-btn" onClick={() => handleGenerateVideo(img)} title="Create Video">🎬</button>
-                                 <a href={img.imageUrl || img.url} download className="icon-btn" title="Download">⬇️</a>
-                                 <button className="delete-btn-gallery" onClick={(e) => handleDeleteGalleryItem(e, img.id)} title="Delete">🗑️</button>
-                              </div>
-                           </div>
-                           <div className="card-info"><h4>{img.name}</h4><span>{new Date(img.createdAt).toLocaleDateString()}</span></div>
-                        </div>
-                      ))}
-                  </div>
-               )}
-            </div>
+            <Gallery 
+                items={userGallery} 
+                loading={loading} 
+                type="user" 
+                handleGenerateVideo={handleGenerateVideo} 
+                handleDelete={handleDeleteGalleryItem} 
+            />
           )}
         </div>
       </main>
-
+      
       {activeTab === 'create' && (
-        <div className="mobile-fab-container">
-           <button className="btn-primary btn-fab" onClick={handleGenerateAll} disabled={loading || sketchFiles.length === 0}>
-              {loading ? '⏳' : '🚀 Generate'}
-           </button>
-        </div>
+          <QuickPickReel 
+              API_BASE_URL={API_BASE_URL} 
+              onSelectTemplate={handleReelSelect} 
+          />
       )}
-
-      {videoModalOpen && (
-         <div className="modal-backdrop">
-            <div className="modal-window">
-               <div className="modal-header"><h3>AI Video Studio</h3><button className="close-btn" onClick={closeVideoModal}>✕</button></div>
-               {videoStatus === 'prompt' && (
-                   <div className="video-prompt-container">
-                       <div><h4>Describe your video</h4><p>Adjust the prompt to help the AI understand your design.</p></div>
-                       <textarea className="text-input" value={videoPrompt} onChange={(e) => setVideoPrompt(e.target.value)} style={{ minHeight: '120px' }} placeholder="E.g. 360 rotation of a gold ring..." />
-                       <div className="prompt-tips"><span className="tip-tag">💡 Mention 'Necklace' or 'Ring'</span><span className="tip-tag">💡 Add 'Slow Motion'</span><span className="tip-tag">💡 Add 'White Background'</span></div>
-                       <button className="btn-primary" onClick={startVideoGeneration} style={{marginTop:'0.5rem'}}>✨ Start Generation</button>
-                   </div>
-               )}
-               {videoStatus !== 'prompt' && (
-                 <>
-                   <div className="video-display">
-                      {videoStatus === 'completed' && videoResult ? (
-                          <div className="video-success-container"><video src={videoResult} controls autoPlay loop className="final-video" /></div>
-                      ) : (
-                          <div className="video-loader">
-                             <div className={`spinner-ring ${videoStatus === 'failed' ? 'error' : ''}`}></div>
-                             <h4>{videoStatus === 'processing' ? 'Rendering...' : 'Waiting...'}</h4>
-                             <p style={{fontSize:'0.8rem', color:'#64748b', marginTop:'10px', maxWidth:'90%', marginInline:'auto'}}>"{videoPrompt.substring(0, 60)}..."</p>
-                          </div>
-                      )}
-                   </div>
-                   <div className="terminal-logs">{videoLogs.map((log, i) => <div key={i} className={`log-line ${log.type}`}>[{log.time}] {log.message}</div>)}</div>
-                 </>
-               )}
-            </div>
-         </div>
-      )}
+      
+      <VideoModal 
+          isOpen={videoModalOpen} 
+          onClose={() => {
+              setVideoModalOpen(false); 
+              if (pollIntervalRef.current) {
+                  clearInterval(pollIntervalRef.current);
+                  pollIntervalRef.current = null;
+              }
+          }} 
+          status={videoStatus} 
+          result={videoResult} 
+          logs={videoLogs} 
+          prompt={videoPrompt} 
+          setPrompt={setVideoPrompt} 
+          startGeneration={startVideoGeneration} 
+      />
     </div>
   );
 }

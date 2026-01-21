@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { auth } from './firebase'; 
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import './App.css';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import './App.css'; // Uses your Light Theme
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,13 +15,11 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
+      // 🔒 STRICT LOGIN ONLY (No Signup)
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
-      setError(err.message.replace('Firebase:', '').trim());
+      console.error(err);
+      setError("Access Denied. Invalid credentials.");
     } finally {
       setLoading(false);
     }
@@ -34,28 +31,28 @@ export default function Auth() {
         <div className="auth-header">
           <div className="logo-icon">💎</div>
           <div className="logo-text">Lumière <span className="gold-text">Atelier</span></div>
-          <p className="sub-text" style={{marginTop: '10px'}}>
-            {isLogin ? 'Sign in to access your studio' : 'Create an account to start designing'}
+          <p className="sub-text" style={{marginTop: '10px', color: '#64748b'}}>
+            Restricted Access Portal
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
-          {error && <div className="error-banner" style={{padding: '10px', fontSize: '0.9rem'}}>{error}</div>}
+          {error && <div className="error-banner">{error}</div>}
           
           <div className="form-group">
-            <label className="nav-label">Email Address</label>
+            <label className="nav-label">Access ID</label>
             <input 
               type="email" 
               className="select-input" 
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
               required 
-              placeholder="name@example.com"
+              placeholder="authorized@lumiere.com"
             />
           </div>
 
           <div className="form-group">
-            <label className="nav-label">Password</label>
+            <label className="nav-label">Passcode</label>
             <input 
               type="password" 
               className="select-input" 
@@ -67,14 +64,14 @@ export default function Auth() {
           </div>
 
           <button type="submit" className="btn-primary full-width" disabled={loading}>
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
+            {loading ? 'Verifying...' : 'Enter Studio'}
           </button>
         </form>
 
-        <div className="auth-footer">
-          <button className="text-btn" onClick={() => setIsLogin(!isLogin)}>
-            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-          </button>
+        <div className="auth-footer" style={{marginTop: '2rem'}}>
+          <p style={{fontSize: '0.8rem', color: '#94a3b8'}}>
+            Authorized Personnel Only. Contact Admin for access.
+          </p>
         </div>
       </div>
     </div>
