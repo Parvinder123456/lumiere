@@ -1,23 +1,16 @@
 import React, { useState, useEffect } from 'react';
 
-// Cache to store data so we don't fetch twice
-const reelCache = { rings: null, necklaces: null };
+// 🧠 IQ 500 Move: Keep cache LOCAL to this file. 
+// Since App.jsx forces a page reload on Logout, this cache is automatically cleared.
+// No need for external files. Secure by design.
+const localReelCache = { rings: null, necklaces: null };
 
-export default function QuickPickReel({ API_BASE_URL, onSelectTemplate }) {
+export default function QuickPickReel({ API_BASE_URL, onSelectTemplate, user }) { // 👈 1. Receive User
   const [isReelOpen, setIsReelOpen] = useState(false);
   const [isFabMenuOpen, setIsFabMenuOpen] = useState(false);
   const [reelCategory, setReelCategory] = useState('rings');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // 1. Pre-fetch data immediately
-  useEffect(() => {
-    const preFetch = async () => {
-      if (!reelCache.rings) fetch(`${API_BASE_URL}/collections?category=rings`).then(r=>r.json()).then(d => reelCache.rings = d).catch(console.error);
-      if (!reelCache.necklaces) fetch(`${API_BASE_URL}/collections?category=necklaces`).then(r=>r.json()).then(d => reelCache.necklaces = d).catch(console.error);
-    };
-    preFetch();
-  }, [API_BASE_URL]);
 
   const toggleFab = () => setIsFabMenuOpen(!isFabMenuOpen);
 
@@ -26,21 +19,36 @@ export default function QuickPickReel({ API_BASE_URL, onSelectTemplate }) {
     setReelCategory(category);
     setIsReelOpen(true);
 
-    // 2. Use Cache if possible
-    if (reelCache[category]) {
-      setItems(reelCache[category]);
-    } else {
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/collections?category=${category}`);
+    // 2. Check Cache
+    if (localReelCache[category]) {
+      setItems(localReelCache[category]);
+      return;
+    }
+
+    // 3. Fetch Securely
+    if (!user) {
+        console.warn("User not authenticated for QuickPick");
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const token = await user.getIdToken(); // 👈 4. Get Token
+        const res = await fetch(`${API_BASE_URL}/collections?category=${category}`, {
+            headers: { 'Authorization': `Bearer ${token}` } // 👈 5. Send Token
+        });
+        
         if(res.ok) {
-          const data = await res.json();
-          reelCache[category] = data;
-          setItems(data);
+            const data = await res.json();
+            localReelCache[category] = data; // Cache it
+            setItems(data);
+        } else {
+            console.error("QuickPick Fetch Failed:", res.status);
         }
-      } finally {
+    } catch (e) {
+        console.error(e);
+    } finally {
         setLoading(false);
-      }
     }
   };
 
@@ -48,6 +56,9 @@ export default function QuickPickReel({ API_BASE_URL, onSelectTemplate }) {
     setIsReelOpen(false);
     onSelectTemplate(url, name);
   };
+
+  // If user isn't logged in, hide the button entirely
+  if (!user) return null;
 
   return (
     <>
@@ -66,14 +77,16 @@ export default function QuickPickReel({ API_BASE_URL, onSelectTemplate }) {
       {isReelOpen && (
           <div className="reel-overlay">
               <div className="reel-header">
-                  <span style={{color: '#1e293b'}}>Quick Pick: {reelCategory}</span>
+                  <span style={{color: '#1e293b'}}>Your {reelCategory}</span>
                   <button className="reel-close" onClick={() => setIsReelOpen(false)}>✕</button>
               </div>
               <div className="reel-scroll-area">
                   {loading ? (
                       <div className="spinner-ring" style={{borderColor: '#ccc', borderLeftColor: '#f59e0b'}}></div>
                   ) : items.length === 0 ? (
-                      <div style={{color:'#64748b', margin:'auto'}}>No items found</div>
+                      <div style={{color:'#64748b', margin:'auto', textAlign:'center', padding:'20px'}}>
+                          No designs found.<br/><span style={{fontSize:'0.8rem'}}>Upload to 'Collections' to see them here!</span>
+                      </div>
                   ) : (
                       items.map((item, i) => (
                           <div key={i} className="reel-item" onClick={() => handleItemClick(item.url, item.name)}>

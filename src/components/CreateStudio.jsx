@@ -1,135 +1,179 @@
 import React, { useState } from 'react';
 import CameraModal from './CameraModal';
+import QRUploadModal from './QRUploadModal';
 
-export default function CreateStudio({ 
-  sketchFiles, setSketchFiles, 
-  personFile, setPersonFile, 
-  logoFile, setLogoFile, 
-  customPrompt, setCustomPrompt,
-  mode, setMode,
-  metalType, setMetalType,
-  gemstone, setGemstone,
-  finish, setFinish,
-  outfit, setOutfit,
-  loading, handleGenerateAll,
-  metalOptions, gemOptions, finishOptions, outfitOptions
+export default function CreateStudio({
+  sketchFiles,
+  setSketchFiles,
+  handleSketchUpload,  // 👈 CRITICAL: Processes files immediately
+  personFile,
+  setPersonFile,
+  customPrompt,
+  setCustomPrompt,
+  mode,
+  setMode,
+  metalType,
+  setMetalType,
+  gemstone,
+  setGemstone,
+  finish,
+  setFinish,
+  outfit,
+  setOutfit,
+  loading,
+  handleGenerateAll,
+  metalOptions,
+  gemOptions,
+  finishOptions,
+  outfitOptions
 }) {
 
-  // 📸 Camera State
+  // 📸 CAMERA STATE
   const [isCamOpen, setIsCamOpen] = useState(false);
   const [camTarget, setCamTarget] = useState(null);
 
-  // 🎥 Open Camera
+  // 📱 QR UPLOAD STATE
+  const [isQROpen, setIsQROpen] = useState(false);
+
+  // 🎥 OPEN CAMERA
   const openCamera = (target) => {
     setCamTarget(target);
     setIsCamOpen(true);
-    console.log('📸 Opening camera for:', target);
   };
 
-  // 📸 Handle Capture
-  const handleCapture = (file) => {
-    console.log('📷 Photo captured:', file.name);
-    
+  // 📸 HANDLE CAMERA CAPTURE - PROCESS IMMEDIATELY
+  const handleCapture = async (file) => {
+    console.log('📷 Camera captured:', file.name);
+
     if (camTarget === 'sketch') {
-      setSketchFiles(prev => [...prev, file]);
-      console.log('✅ Sketch added');
+      // ✅ Process immediately (same as file upload)
+      await handleSketchUpload([file]);
     } else if (camTarget === 'person') {
       setPersonFile(file);
-      console.log('✅ Person photo set');
     }
   };
 
-  // 📁 File Handlers
-  const handleSketchUpload = (e) => setSketchFiles(prev => [...prev, ...Array.from(e.target.files)]);
-  const removeSketch = (idx) => setSketchFiles(prev => prev.filter((_, i) => i !== idx));
+  // 📁 FILE UPLOAD
+  const handleFileInput = (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleSketchUpload(files);  // ✅ Process immediately
+    }
+    e.target.value = '';
+  };
+
+  const removeSketch = (index) => {
+    setSketchFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 📱 HANDLE PERSON IMAGE FROM QR SESSION (Try-On)
+  const handleQRImage = async (base64) => {
+    // Convert base64 back to a File object and set as person image
+    const res = await fetch(base64);
+    const blob = await res.blob();
+    const file = new File([blob], `qr-tryon-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    await setPersonFile(file);
+  };
 
   return (
     <div className="create-container">
-      
+
       {/* 📸 CAMERA MODAL */}
-      <CameraModal 
-        isOpen={isCamOpen} 
-        onClose={() => setIsCamOpen(false)} 
+      <CameraModal
+        isOpen={isCamOpen}
+        onClose={() => setIsCamOpen(false)}
         onCapture={handleCapture}
         mode={camTarget === 'sketch' ? 'environment' : 'user'}
       />
 
+      {/* 📱 QR UPLOAD MODAL */}
+      <QRUploadModal
+        isOpen={isQROpen}
+        onClose={() => setIsQROpen(false)}
+        onImageReceived={handleQRImage}
+        userId="lumiere-user"
+      />
+
       <div className="grid-layout">
         <div className="col-left">
-          
-          {/* SKETCH UPLOAD - YOUR ORIGINAL DESIGN */}
+
+          {/* SKETCHES CARD */}
           <div className="card upload-card-lg">
-            <div className="card-header"><h3>Sketches <span className="req">*</span></h3></div>
-            
+            <div className="card-header">
+              <h3>Sketches <span className="req">*</span></h3>
+            </div>
+
             <div className={`upload-zone ${sketchFiles.length > 0 ? 'has-files' : ''}`}>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 id="sketchInput"
-                multiple 
-                onChange={handleSketchUpload} 
+                accept="image/*"
+                multiple
+                onChange={handleFileInput}
+                disabled={loading}
               />
-              <label>
-                  {sketchFiles.length === 0 && <div className="upload-icon-lg">✏️</div>}
-                  <span>{sketchFiles.length > 0 ? 'Add more sketches...' : 'Click to Upload Sketches'}</span>
+              <label htmlFor="sketchInput">
+                {sketchFiles.length === 0 && <span className="upload-icon-lg">✏️</span>}
+                <div>{sketchFiles.length > 0 ? 'Add more sketches...' : 'Click to Upload Sketches'}</div>
               </label>
             </div>
 
-            {/* 📸 CAMERA BUTTON - ADDED BELOW UPLOAD ZONE */}
-            <div style={{display: 'flex', gap: '10px', marginTop: '15px', justifyContent: 'center'}}>
-              <button 
-                className="btn-upload-sm" 
+            {/* 📸 UPLOAD BUTTONS */}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn-upload-sm"
                 onClick={() => document.getElementById('sketchInput').click()}
                 type="button"
+                disabled={loading}
               >
                 📁 Upload Files
               </button>
-              <button 
-                className="btn-upload-sm" 
+              <button
+                className="btn-upload-sm"
                 onClick={() => openCamera('sketch')}
                 type="button"
+                disabled={loading}
               >
                 📸 Take Photo
               </button>
             </div>
 
-            {/* FILE PREVIEW - YOUR ORIGINAL DESIGN */}
+            {/* FILE PREVIEW */}
             {sketchFiles.length > 0 && (
-              <div className="file-list-preview" style={{marginTop:'15px'}}>
-                {sketchFiles.map((f, i) => (
-                  <div key={i} className="file-tag">
-                    <span className="truncated-text">{f.name}</span>
-                    <span 
-                      onClick={(e) => {e.preventDefault(); removeSketch(i);}} 
-                      style={{cursor:'pointer', color:'#ef4444', marginLeft:'8px', fontWeight:'bold'}}
-                    >
-                      ✕
+              <div className="file-list-preview" style={{ marginTop: '15px' }}>
+                {sketchFiles.map((file, idx) => (
+                  <div key={idx} className="file-tag">
+                    <span className="truncated-text">{file.name}</span>
+                    <span style={{ fontSize: '0.8rem', opacity: 0.7, marginLeft: '6px' }}>
+                      ({(file.size / 1024).toFixed(0)}KB)
                     </span>
+                    <button
+                      onClick={() => removeSketch(idx)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        fontSize: '1.2rem',
+                        padding: '0 0 0 8px'
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* LOGO - YOUR ORIGINAL DESIGN */}
-          <div className="card">
-            <h3>Brand Logo</h3>
-            <div className="mini-upload">
-              <input 
-                type="file" 
-                id="logoInput"
-                onChange={e=>setLogoFile(e.target.files[0])} 
-              />
-              <label>{logoFile ? `✅ ${logoFile.name}` : 'Upload PNG'}</label>
-            </div>
-          </div>
-
-          {/* OUTFIT - YOUR ORIGINAL DESIGN */}
+          {/* OUTFIT */}
           <div className="card">
             <h3>Matching Outfit</h3>
-            <select 
-              className="select-input" 
-              value={outfit} 
+            <select
+              className="select-input"
+              value={outfit}
               onChange={(e) => setOutfit(e.target.value)}
+              disabled={loading}
             >
               {outfitOptions.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -137,65 +181,80 @@ export default function CreateStudio({
             </select>
           </div>
 
-          {/* PROMPT - YOUR ORIGINAL DESIGN */}
+          {/* CUSTOM PROMPT */}
           <div className="card">
             <h3>Custom Prompt</h3>
-            <textarea 
-              className="text-input" 
-              value={customPrompt} 
-              onChange={e => setCustomPrompt(e.target.value)} 
-              placeholder="Details..." 
+            <textarea
+              className="text-input"
+              placeholder="Add specific details about your design..."
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              disabled={loading}
             />
           </div>
+
         </div>
-        
+
         <div className="col-right">
-          
-          {/* MODE - YOUR ORIGINAL DESIGN */}
+
+          {/* MODE SELECTOR */}
           <div className="card">
             <h3>Mode</h3>
             <div className="pill-group">
-              <button 
-                className={`pill ${mode==='product'?'active':''}`} 
-                onClick={()=>setMode('product')}
+              <button
+                className={`pill ${mode === 'product' ? 'active' : ''}`}
+                onClick={() => setMode('product')}
+                disabled={loading}
               >
                 📸 Product
               </button>
-              <button 
-                className={`pill ${mode==='try_on'?'active':''}`} 
-                onClick={()=>setMode('try_on')}
+              <button
+                className={`pill ${mode === 'try_on' ? 'active' : ''}`}
+                onClick={() => setMode('try_on')}
+                disabled={loading}
               >
                 👤 Try-On
               </button>
             </div>
 
-            {/* PERSON IMAGE WITH CAMERA - MODIFIED */}
+            {/* PERSON IMAGE WITH CAMERA */}
             {mode === 'try_on' && (
-              <div className="mini-upload" style={{marginTop: '1rem'}}>
-                <input 
-                  type="file" 
+              <div className="mini-upload" style={{ marginTop: '1rem' }}>
+                <input
+                  type="file"
                   id="personInput"
-                  style={{display: 'none'}}
-                  onChange={e=>setPersonFile(e.target.files[0])} 
+                  style={{ display: 'none' }}
+                  onChange={(e) => setPersonFile(e.target.files[0])}
+                  accept="image/*"
                 />
-                
-                {/* Camera + Upload Buttons */}
-                <div style={{display: 'flex', gap: '8px', marginBottom: '8px'}}>
-                  <button 
-                    className="btn-upload-sm" 
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn-upload-sm"
                     onClick={() => document.getElementById('personInput').click()}
                     type="button"
-                    style={{flex: 1}}
+                    style={{ flex: 1 }}
+                    disabled={loading}
                   >
                     📁 Gallery
                   </button>
-                  <button 
-                    className="btn-upload-sm" 
+                  <button
+                    className="btn-upload-sm"
                     onClick={() => openCamera('person')}
                     type="button"
-                    style={{flex: 1}}
+                    style={{ flex: 1 }}
+                    disabled={loading}
                   >
                     🤳 Selfie
+                  </button>
+                  <button
+                    className="btn-upload-sm btn-qr"
+                    onClick={() => setIsQROpen(true)}
+                    type="button"
+                    style={{ flex: 1 }}
+                    disabled={loading}
+                  >
+                    📱 QR Upload
                   </button>
                 </div>
 
@@ -216,72 +275,70 @@ export default function CreateStudio({
             )}
           </div>
 
-          {/* METAL - YOUR ORIGINAL DESIGN */}
+          {/* METAL */}
           <div className="card">
             <h3>Metal</h3>
             <div className="grid-select">
               {metalOptions.map(opt => (
-                <button 
-                  key={opt.value} 
-                  className={`grid-btn ${metalType===opt.value?'selected':''}`} 
-                  onClick={()=>setMetalType(opt.value)}
+                <button
+                  key={opt.value}
+                  className={`grid-btn ${metalType === opt.value ? 'selected' : ''}`}
+                  onClick={() => setMetalType(opt.value)}
+                  disabled={loading}
                 >
-                  <span 
-                    className="dot" 
-                    style={{
-                      background:opt.color, 
-                      border: opt.value==='none'?'1px dashed #ccc':'none'
-                    }}
-                  ></span>
+                  <div className="dot" style={{ background: opt.color }}></div>
                   <span className="btn-label">{opt.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* GEMSTONE - YOUR ORIGINAL DESIGN */}
+          {/* GEMSTONE */}
           <div className="card">
             <h3>Gemstone</h3>
             <div className="grid-select">
               {gemOptions.map(opt => (
-                <button 
-                  key={opt.value} 
-                  className={`grid-btn ${gemstone===opt.value?'selected':''}`} 
-                  onClick={()=>setGemstone(opt.value)}
+                <button
+                  key={opt.value}
+                  className={`grid-btn ${gemstone === opt.value ? 'selected' : ''}`}
+                  onClick={() => setGemstone(opt.value)}
+                  disabled={loading}
                 >
-                  <span className="dot" style={{background:opt.color}}></span>
+                  <div className="dot" style={{ background: opt.color }}></div>
                   <span className="btn-label">{opt.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* FINISH - YOUR ORIGINAL DESIGN */}
+          {/* FINISH */}
           <div className="card">
             <h3>Finish</h3>
             <div className="grid-select">
               {finishOptions.map(opt => (
-                <button 
-                  key={opt.value} 
-                  className={`grid-btn ${finish === opt.value ? 'selected' : ''}`} 
+                <button
+                  key={opt.value}
+                  className={`grid-btn ${finish === opt.value ? 'selected' : ''}`}
                   onClick={() => setFinish(opt.value)}
+                  disabled={loading}
                 >
-                  <span className="dot" style={{background: opt.color}}></span>
+                  <div className="dot" style={{ background: opt.color }}></div>
                   <span className="btn-label">{opt.label}</span>
                 </button>
               ))}
             </div>
           </div>
-          
-          {/* GENERATE BUTTON - YOUR ORIGINAL DESIGN */}
-          <button 
-            className="btn-primary" 
-            style={{width:'100%', marginTop:'1rem'}} 
-            onClick={handleGenerateAll} 
+
+          {/* GENERATE BUTTON */}
+          <button
+            className="btn-primary"
+            style={{ width: '100%', marginTop: '1rem' }}
+            onClick={handleGenerateAll}
             disabled={loading}
           >
             {loading ? 'Working...' : 'Generate'}
           </button>
+
         </div>
       </div>
     </div>

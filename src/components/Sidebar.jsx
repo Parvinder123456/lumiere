@@ -4,14 +4,16 @@ import { auth } from '../firebase';
 
 export default function Sidebar({ 
   user, 
-  credits, // 👈 Receiving credits from App.jsx
+  credits,
+  logoUrl,
   activeTab, 
   setActiveTab, 
   activeCategory, 
   loadCollection, 
   handleLogout, 
   mobileMenuOpen, 
-  setMobileMenuOpen 
+  setMobileMenuOpen,
+  onManageLogo
 }) {
   
   const [showMenu, setShowMenu] = useState(false);
@@ -30,33 +32,63 @@ export default function Sidebar({
   return (
     <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
       <div className="sidebar-header">
-        <div className="logo-icon">💎</div>
-        <div className="logo-text">Lumière <span className="gold-text">Atelier</span></div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="logo-icon"></div>
+          <div className="logo-text">JEWEL<span className="gold-text"> AI</span></div>
+        </div>
         <button className="mobile-close-btn" onClick={() => setMobileMenuOpen(false)}>✕</button>
       </div>
 
       <nav className="sidebar-nav">
-        <button className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}>
+        <button 
+          className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} 
+          onClick={() => {setActiveTab('create'); setMobileMenuOpen(false);}}
+        >
           <span className="icon">✨</span> Create Design
         </button>
-        <button className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => {setActiveTab('gallery'); setMobileMenuOpen(false);}}>
+        
+        <button 
+          className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} 
+          onClick={() => {setActiveTab('gallery'); setMobileMenuOpen(false);}}
+        >
           <span className="icon">🖼️</span> My Gallery
         </button>
         
         <div className="nav-divider"></div>
         <div className="nav-label">Collections</div>
-        <button className={`nav-item-sub ${activeCategory === 'rings' && activeTab === 'collections' ? 'active' : ''}`} onClick={() => loadCollection('rings')}>Engagement Rings</button>
-        <button className={`nav-item-sub ${activeCategory === 'necklaces' && activeTab === 'collections' ? 'active' : ''}`} onClick={() => loadCollection('necklaces')}>Necklaces</button>
+        
+        <button 
+          className={`nav-item-sub ${activeCategory === 'rings' && activeTab === 'collections' ? 'active' : ''}`} 
+          onClick={() => loadCollection('rings')}
+        >
+          Engagement Rings
+        </button>
+        
+        <button 
+          className={`nav-item-sub ${activeCategory === 'necklaces' && activeTab === 'collections' ? 'active' : ''}`} 
+          onClick={() => loadCollection('necklaces')}
+        >
+          Necklaces
+        </button>
       </nav>
 
-      {/* --- USER PROFILE --- */}
+      {/* USER PROFILE */}
       <div className="user-profile" onClick={() => setShowMenu(!showMenu)}>
         
         {showMenu && (
           <div className="profile-menu">
+            <button onClick={(e) => { 
+              e.stopPropagation(); 
+              setShowMenu(false);
+              onManageLogo(); 
+            }}>
+              {logoUrl ? '🖼️ Change Logo' : '📷 Add Logo'}
+            </button>
+            
             <button onClick={(e) => { e.stopPropagation(); handleChangePassword(); }}>
               🔑 Change Password
             </button>
+            
             <button className="danger" onClick={(e) => { e.stopPropagation(); handleLogout(); }}>
               🚪 Logout
             </button>
@@ -65,8 +97,7 @@ export default function Sidebar({
 
         <div className="avatar">{user.email ? user.email[0].toUpperCase() : 'U'}</div>
         <div className="user-info">
-          <span className="name">{user.email.split('@')[0]}</span>
-          {/* 👇 CREDIT DISPLAY HERE */}
+          <span className="name">{user.email ? user.email.split('@')[0] : 'User'}</span>
           <span className="plan" style={{color: '#f59e0b', fontWeight: 'bold', fontSize: '0.85rem'}}>
              💎 {credits !== undefined ? credits : '-'} Credits
           </span>
